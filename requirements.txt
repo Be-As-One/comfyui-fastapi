@@ -1,0 +1,12 @@
+# Core dependencies
+fastapi
+uvicorn
+typer
+loguru
+requests
+websocket-client
+pydantic
+
+# Storage dependencies (optional)
+google-cloud-storage  # For Google Cloud Storage
+boto3                 # For Cloudflare R2 and AWS S3
