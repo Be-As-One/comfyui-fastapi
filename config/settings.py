@@ -34,7 +34,7 @@ comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:3001')
 storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')  # 'gcs' 或 'r2'
 
 # Google Cloud Storage 配置
-bucket_name = os.getenv('GCS_BUCKET_NAME', 'mtask_storage')
+bucket_name = os.getenv('GCS_BUCKET_NAME', 'cdn-test-ai-undress-ai')
 bucket_region = os.getenv('GCS_BUCKET_REGION', 'us-east-1')
 
 # Cloudflare R2 配置
@@ -53,5 +53,5 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG')
 LOG_FILE = os.getenv('LOG_FILE', 'logs/app.log')
 
 # 服务器配置
-DEFAULT_HOST = "127.0.0.1"
+DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
