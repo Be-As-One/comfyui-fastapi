@@ -222,6 +222,7 @@ class ComfyUIProcessor:
         logger.debug(f"  - 最终payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
 
         try:
+            t_start = time.time()
             logger.debug(f"📤 发送POST请求到: {url}")
             response = requests.post(url, json=payload)
             logger.debug(f"📥 收到响应状态码: {response.status_code}")
@@ -234,7 +235,7 @@ class ComfyUIProcessor:
                 logger.debug(f"📥 无法读取响应内容: {text_error}")
 
             response.raise_for_status()
-            logger.info(f"✅ Task update sent successfully for task {task_id},耗时{time.time() - t_start:.2f}秒")
+            logger.info(f"✅ Task update sent successfully for task {task_id}, 耗时{time.time() - t_start:.2f}秒")
             logger.debug(f"✅ 成功发送任务状态更新: {status}")
             return True
         except requests.exceptions.RequestException as e:
