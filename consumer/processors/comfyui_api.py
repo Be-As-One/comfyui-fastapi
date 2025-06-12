@@ -199,7 +199,9 @@ class ComfyUI:
                                 logger.debug("收到没有prompt_id的执行消息")
                         elif data["type"] == "progress":
                             progress_data = data["data"]
-                            logger.info(f"执行进度: {progress_data.get('value', 0)}/{progress_data.get('max', 0)}")
+                            progress_value = progress_data.get('value', 0)
+                            progress_max = progress_data.get('max', 0)
+                            logger.info(f"执行进度: {progress_value}/{progress_max}")
                         else:
                             logger.debug(f"收到其他消息: type={data.get('type')}")
                     except json.JSONDecodeError as e:
@@ -281,10 +283,6 @@ class ComfyUI:
 
         logger.info(f"图像生成完成! 总共生成 {len(output_urls)} 张图片")
         return output_urls
-
-    def generate_images(self, prompt: dict, message_id: str) -> list[str]:
-        """生成图像"""
-        return self.get_images(prompt, message_id)
 
     def __del__(self):
         """析构函数，确保 WebSocket 连接被关闭"""

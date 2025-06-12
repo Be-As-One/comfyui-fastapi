@@ -123,7 +123,9 @@ class ComfyUIProcessor:
                 logger.error(f"更新任务状态时也发生异常: {str(update_error)}")
 
             return None
-    
+
+
+
     def _execute_comfyui_task(self, wf_json, task_id):
         """执行ComfyUI任务"""
         logger.debug(f"开始执行ComfyUI工作流: {task_id}")
@@ -147,11 +149,11 @@ class ComfyUIProcessor:
             comfyui = ComfyUI(server_address=server_address)
 
             logger.info(f"开始生成图像...")
-            logger.debug(f"🎯 调用comfyui.generate_images，参数:")
+            logger.debug(f"🎯 调用comfyui.get_images，参数:")
             logger.debug(f"  - wf_json类型: {type(wf_json)}")
             logger.debug(f"  - task_id: {task_id}")
 
-            results = comfyui.generate_images(wf_json, task_id)
+            results = comfyui.get_images(wf_json, task_id)
 
             logger.debug(f"🎯 ComfyUI API返回结果分析:")
             logger.debug(f"  - results类型: {type(results)}")
