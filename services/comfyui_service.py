@@ -73,7 +73,7 @@ class ComfyUIService:
 
             response = urllib.request.urlopen(url)
             # ComfyUI根路径通常返回HTML，我们只检查连接状态
-            
+
             logger.info("ComfyUI服务器连接正常")
             return {
                 "server_address": self.server_address,
@@ -82,6 +82,44 @@ class ComfyUIService:
             }
         except Exception as e:
             logger.error(f"获取服务器信息失败: {str(e)}")
+            raise
+
+    def interrupt_current_task(self) -> Dict[str, Any]:
+        """中断当前正在执行的任务"""
+        try:
+            url = f"http://{self.server_address}/interrupt"
+            logger.debug(f"中断当前任务: {url}")
+
+            req = urllib.request.Request(url, method='POST')
+            response = urllib.request.urlopen(req)
+
+            # 有些ComfyUI版本可能返回空响应
+            try:
+                result = json.loads(response.read())
+            except:
+                result = {"status": "interrupted"}
+
+            logger.info("当前任务中断成功")
+            return result
+        except Exception as e:
+            logger.error(f"中断当前任务失败: {str(e)}")
+            raise
+
+    def get_queue_history(self, max_items: int = 100) -> Dict[str, Any]:
+        """获取队列历史记录"""
+        try:
+            url = f"http://{self.server_address}/history"
+            if max_items:
+                url += f"?max_items={max_items}"
+            logger.debug(f"获取队列历史: {url}")
+
+            response = urllib.request.urlopen(url)
+            history_data = json.loads(response.read())
+
+            logger.info(f"队列历史获取成功，共 {len(history_data)} 条记录")
+            return history_data
+        except Exception as e:
+            logger.error(f"获取队列历史失败: {str(e)}")
             raise
 
 
