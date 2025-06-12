@@ -2,7 +2,7 @@
 FastAPI 应用服务器
 """
 from fastapi import FastAPI
-from api.routes import tasks, health
+from api.routes import tasks, health, comfyui
 
 # 创建FastAPI应用
 app = FastAPI(
@@ -14,6 +14,7 @@ app = FastAPI(
 # 注册路由
 app.include_router(health.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
+app.include_router(comfyui.router, prefix="/api")
 
 @app.get("/")
 async def root():

@@ -119,6 +119,8 @@ class ComfyUI:
             logger.error(f"获取历史记录失败: {str(e)}")
             raise
 
+
+
     def get_image_from_comfyui(self, filename: str, subfolder: str, folder_type: str) -> bytes:
         """从ComfyUI获取图像数据"""
         try:
@@ -275,7 +277,7 @@ class ComfyUI:
         outputs = prompt_history.get("outputs", {})
         logger.info(f"找到 {len(outputs)} 个输出节点")
 
-        # 4. 处理所有输出图像
+        # 6. 处理所有输出图像
         output_urls = []
         for node_id, node_output in outputs.items():
             logger.debug(f"处理节点 {node_id} 的输出")
