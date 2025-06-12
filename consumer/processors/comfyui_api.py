@@ -139,7 +139,7 @@ class ComfyUI:
             logger.error(f"获取图像失败: {filename}, 错误: {str(e)}")
             raise
 
-    def wait_for_completion(self, prompt_id: str, timeout: int = 150) -> None:
+    def wait_for_completion(self, prompt_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> None:
         """使用WebSocket等待执行完成"""
         # 确保 WebSocket 已连接且活跃
         if not self.ws_connected or not self.is_websocket_alive():
@@ -148,6 +148,10 @@ class ComfyUI:
         logger.info(f"等待 prompt {prompt_id} 执行完成...")
         self.ws.settimeout(timeout)
         start_time = time.time()
+
+        # 进度通知控制变量
+        last_progress_time = 0
+        progress_interval = 3  # 最少3秒间隔才发送进度更新
 
         try:
             while True:
@@ -201,7 +205,30 @@ class ComfyUI:
                             progress_data = data["data"]
                             progress_value = progress_data.get('value', 0)
                             progress_max = progress_data.get('max', 0)
-                            logger.info(f"执行进度: {progress_value}/{progress_max}")
+
+                            # 每次都打印进度信息（便于调试和监控）
+                            progress_percent = (progress_value / progress_max * 100) if progress_max > 0 else 0
+                            message = f"执行进度: {progress_value}/{progress_max} ({progress_percent:.1f}%)"
+                            logger.info(message)
+
+                            # 智能HTTP回调通知：避免频繁请求
+                            current_time = time.time()
+                            should_notify = False
+
+                            # 条件1：时间间隔足够（3秒以上）
+                            if current_time - last_progress_time >= progress_interval:
+                                should_notify = True
+
+                            # 条件2：接近完成（90%以上）
+                            if progress_max > 0 and progress_value / progress_max >= 0.9:
+                                should_notify = True
+
+                            if should_notify and task_id and progress_callback:
+                                try:
+                                    progress_callback(task_id, "PROCESSING", message)
+                                    last_progress_time = current_time
+                                except Exception as e:
+                                    logger.error(f"进度回调失败: {str(e)}")
                         else:
                             logger.debug(f"收到其他消息: type={data.get('type')}")
                     except json.JSONDecodeError as e:
@@ -221,7 +248,7 @@ class ComfyUI:
             self.ws_connected = False
             raise
 
-    def get_images(self, prompt: dict, message_id: str, timeout: int = 150) -> list[str]:
+    def get_images(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
         """生成图像并获取结果"""
         logger.info(f"开始图像生成流程")
 
@@ -234,7 +261,7 @@ class ComfyUI:
 
         # 2. 等待执行完成
         logger.info("等待工作流执行完成...")
-        self.wait_for_completion(prompt_id, timeout)
+        self.wait_for_completion(prompt_id, timeout, task_id, progress_callback)
 
         # 3. 获取执行历史和结果
         logger.info("获取执行结果...")

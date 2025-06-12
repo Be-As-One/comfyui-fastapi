@@ -153,7 +153,11 @@ class ComfyUIProcessor:
             logger.debug(f"  - wf_json类型: {type(wf_json)}")
             logger.debug(f"  - task_id: {task_id}")
 
-            results = comfyui.get_images(wf_json, task_id)
+            # 创建简单的进度回调函数
+            def progress_callback(task_id, status, message):
+                self._update_task_status(task_id, status, message)
+
+            results = comfyui.get_images(wf_json, task_id, task_id=task_id, progress_callback=progress_callback)
 
             logger.debug(f"🎯 ComfyUI API返回结果分析:")
             logger.debug(f"  - results类型: {type(results)}")
