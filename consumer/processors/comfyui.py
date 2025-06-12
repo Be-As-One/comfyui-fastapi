@@ -3,6 +3,7 @@ ComfyUI 任务处理器
 """
 import json
 import time
+import requests
 from datetime import datetime, timezone
 from loguru import logger
 
@@ -153,6 +154,9 @@ class ComfyUIProcessor:
             logger.debug(f"  - wf_json类型: {type(wf_json)}")
             logger.debug(f"  - task_id: {task_id}")
 
+            # 预处理工作流
+            wf_json = self._preprocess_workflow(wf_json)
+
             # 创建简单的进度回调函数
             def progress_callback(task_id, status, message):
                 self._update_task_status(task_id, status, message)
@@ -184,10 +188,45 @@ class ComfyUIProcessor:
             logger.debug(f"异常详情:", exc_info=True)
             raise
     
+    def _preprocess_workflow(self, wf_json):
+        """预处理工作流"""
+        from services.image_service import image_service
+
+        logger.debug(f"开始预处理工作流")
+
+        # 遍历工作流中的所有节点
+        for node_id, node_data in wf_json.items():
+            if not isinstance(node_data, dict):
+                continue
+
+            class_type = node_data.get("class_type")
+            if class_type == "LoadImage":
+                inputs = node_data.get("inputs", {})
+                image_url = inputs.get("image")
+
+                if image_service.is_remote_url(image_url):
+                    logger.info(f"发现LoadImage节点 {node_id} 包含远程图片: {image_url}")
+
+                    try:
+                        # 使用图片服务下载图片到ComfyUI input目录
+                        local_filename = image_service.download_image(image_url)
+
+                        # 更新节点的image路径为本地文件名
+                        inputs["image"] = local_filename
+                        logger.info(f"✅ 节点 {node_id} 图片已下载并更新路径: {local_filename}")
+
+                    except Exception as e:
+                        logger.error(f"❌ 下载图片失败 {image_url}: {str(e)}")
+                        raise Exception(f"预处理工作流失败：无法下载图片 {image_url}")
+
+        logger.debug(f"预处理完成")
+        return wf_json
+
+
+
     def _update_task_status(self, task_id, status, message=None,
                            started_at=None, finished_at=None, output_data=None):
         """更新任务状态"""
-        import requests
         from config.settings import task_api_url
 
         # 详细调试信息
