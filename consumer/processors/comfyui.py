@@ -34,7 +34,7 @@ class ComfyUIProcessor:
 
         if not wf_json:
             logger.error("工作流JSON为空，无法处理")
-            self._update_task_status(task_id, "FAILED", message="工作流JSON为空")
+            self._update_task_status(task_id, "FAILED", message="工作流JSON为空",started_at=task_started_at)
             return None
 
         logger.debug(f"工作流JSON结构: {json.dumps(wf_json, indent=2, ensure_ascii=False)[:500]}...")
@@ -246,7 +246,8 @@ class ComfyUIProcessor:
 
         payload = {
             "taskId": task_id,
-            "status": status
+            "status": status,
+            "started_at":started_at,
         }
 
         if message:
