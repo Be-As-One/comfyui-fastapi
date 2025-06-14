@@ -52,7 +52,7 @@ class ComfyUIProcessor:
             # 执行ComfyUI任务处理
             logger.info(f"开始执行ComfyUI工作流: {task_id}")
             t_gen_start = time.time()
-            results = self._execute_comfyui_task(wf_json, task_id)
+            results = self._execute_comfyui_task(wf_json, task_id,task_started_at)
             execution_time = time.time() - t_gen_start
 
             logger.info(f"图像生成耗时: {execution_time:.2f} 秒")
@@ -127,7 +127,7 @@ class ComfyUIProcessor:
 
 
 
-    def _execute_comfyui_task(self, wf_json, task_id):
+    def _execute_comfyui_task(self, wf_json, task_id,task_started_at):
         """执行ComfyUI任务"""
         logger.debug(f"开始执行ComfyUI工作流: {task_id}")
 
@@ -159,7 +159,7 @@ class ComfyUIProcessor:
 
             # 创建简单的进度回调函数
             def progress_callback(task_id, status, message):
-                self._update_task_status(task_id, status, message)
+                self._update_task_status(task_id, status, message,started_at=task_started_at)
 
             results = comfyui.get_images(wf_json, task_id, task_id=task_id, progress_callback=progress_callback)
 
@@ -247,7 +247,7 @@ class ComfyUIProcessor:
         payload = {
             "taskId": task_id,
             "status": status,
-            "started_at":started_at,
+            "started_at":started_at
         }
 
         if message:
