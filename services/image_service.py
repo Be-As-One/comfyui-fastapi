@@ -50,13 +50,30 @@ class ImageService:
             
             logger.debug(f"开始下载图片: {image_url} -> {local_path}")
             
-            # 下载图片
+            # 下载图片 - 使用指数退避重试机制
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
             
-            response = requests.get(image_url, headers=headers, timeout=30)
-            response.raise_for_status()
+            max_retries = 3
+            base_delay = 1  # 基础延迟1秒
+            
+            for attempt in range(max_retries + 1):  # 总共尝试4次 (0, 1, 2, 3)
+                try:
+                    logger.debug(f"尝试下载图片 (第{attempt + 1}次): {image_url}")
+                    response = requests.get(image_url, headers=headers, timeout=30)
+                    response.raise_for_status()
+                    break  # 成功则跳出重试循环
+                    
+                except requests.exceptions.RequestException as e:
+                    if attempt == max_retries:  # 最后一次尝试失败
+                        logger.error(f"❌ 下载失败，已达到最大重试次数 ({max_retries + 1}): {str(e)}")
+                        raise
+                    
+                    # 计算退避延迟时间：1秒 → 2秒 → 4秒
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"⚠️ 下载失败 (第{attempt + 1}次)，{delay}秒后重试: {str(e)}")
+                    time.sleep(delay)
             
             # 检查内容类型
             content_type = response.headers.get('content-type', '')
