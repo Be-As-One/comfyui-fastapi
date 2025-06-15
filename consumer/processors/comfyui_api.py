@@ -278,14 +278,18 @@ class ComfyUI:
         outputs = prompt_history.get("outputs", {})
         logger.info(f"找到 {len(outputs)} 个输出节点")
 
-        # 6. 处理所有输出图像
+        # 6. 只处理SaveImage节点的输出图像
         output_urls = []
         for node_id, node_output in outputs.items():
-            logger.debug(f"处理节点 {node_id} 的输出")
+            # 检查是否为SaveImage节点
+            if prompt.get(node_id, {}).get("class_type") != "SaveImage":
+                continue
+                
+            logger.debug(f"处理SaveImage节点 {node_id} 的输出")
 
             if "images" in node_output:
                 images = node_output["images"]
-                logger.info(f"节点 {node_id} 生成了 {len(images)} 张图像")
+                logger.info(f"SaveImage节点 {node_id} 生成了 {len(images)} 张图像")
 
                 for i, image_info in enumerate(images):
                     try:
