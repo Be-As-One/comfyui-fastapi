@@ -11,9 +11,10 @@ from datetime import datetime
 from websocket import WebSocketTimeoutException
 from loguru import logger
 from core.storage import get_storage_manager
+from config.settings import cdn_url
 
 class ComfyUI:
-    def __init__(self, server_address="127.0.0.1:8188"):
+    def __init__(self, server_address="127.0.0.1:8188", cdn_url="https://cdn.undress.ai"):
         self.server_address = server_address
         self.client_id = str(uuid.uuid4())
         self.ws = None
@@ -302,7 +303,7 @@ class ComfyUI:
                         logger.info(f"上传图像到: {path}")
 
                         url = get_storage_manager().upload_binary(image_data, path)
-                        output_urls.append(url)
+                        output_urls.append(f"{cdn_url}/{path}")
                         logger.info(f"图像上传成功: {url}")
 
                     except Exception as e:

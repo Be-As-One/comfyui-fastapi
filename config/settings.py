@@ -36,6 +36,7 @@ storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')  # 'gcs' 或 'r2'
 # Google Cloud Storage 配置
 bucket_name = os.getenv('GCS_BUCKET_NAME', 'cdn-test-ai-undress-ai')
 bucket_region = os.getenv('GCS_BUCKET_REGION', 'us-east-1')
+cdn_url = os.getenv('CDN_URL', 'https://cdn.ai-undress.ai')
 
 # Cloudflare R2 配置
 r2_bucket_name = os.getenv('R2_BUCKET_NAME', '')
