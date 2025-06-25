@@ -1,160 +1,12 @@
 """
-存储工具 - 支持多种云存储提供商
+存储管理器 - 统一管理多种存储提供商
 """
 import os
-import base64
-from abc import ABC, abstractmethod
-from io import BytesIO
-from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
 from config.settings import bucket_name
+from .base import StorageProvider
 
-class StorageProvider(ABC):
-    """存储提供商抽象基类"""
-
-    @abstractmethod
-    def upload_file(self, source_file_name: str, destination_path: str) -> str:
-        """上传文件，返回URL"""
-        pass
-
-    @abstractmethod
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
-        """上传二进制数据，返回URL"""
-        pass
-
-    @abstractmethod
-    def upload_base64(self, base64_data: str, destination_path: str) -> str:
-        """上传base64数据，返回URL"""
-        pass
-
-class GCSProvider(StorageProvider):
-    """Google Cloud Storage 提供商"""
-
-    def __init__(self, bucket_name: str):
-        try:
-            from google.cloud import storage
-            self.client = storage.Client()
-            self.bucket = self.client.bucket(bucket_name)
-            self.bucket_name = bucket_name
-        except ImportError:
-            raise ImportError("google-cloud-storage is required for GCS provider")
-
-    def upload_file(self, source_file_name: str, destination_path: str) -> str:
-        """上传文件到GCS"""
-        try:
-            blob = self.bucket.blob(destination_path)
-            blob.upload_from_filename(source_file_name)
-            logger.info(f"File {source_file_name} uploaded to GCS: {destination_path}")
-
-            # 删除本地文件
-            os.remove(source_file_name)
-            logger.info(f"Local file {source_file_name} deleted after upload")
-
-            return f"https://storage.googleapis.com/{self.bucket_name}/{destination_path}"
-        except Exception as e:
-            logger.error(f"Failed to upload file to GCS: {e}")
-            raise
-
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
-        """上传二进制数据到GCS"""
-        logger.info(f"开始上传二进制数据到GCS: {destination_path}")
-        logger.debug(f"数据大小: {len(binary_data)} bytes")
-
-        try:
-            blob = self.bucket.blob(destination_path)
-            logger.debug(f"创建GCS blob对象: {destination_path}")
-
-            blob.upload_from_string(binary_data)
-            logger.debug(f"数据上传完成")
-
-            url = f"https://storage.googleapis.com/{self.bucket_name}/{destination_path}"
-            logger.info(f"GCS上传成功: {url}")
-            return url
-        except Exception as e:
-            logger.error(f"GCS上传失败: {str(e)}")
-            logger.error(f"失败详情 - 路径: {destination_path}, 数据大小: {len(binary_data)} bytes")
-            raise
-
-    def upload_base64(self, base64_data: str, destination_path: str) -> str:
-        """上传base64数据到GCS"""
-        try:
-            file_data = base64.b64decode(base64_data)
-            file_obj = BytesIO(file_data)
-
-            blob = self.bucket.blob(destination_path)
-            blob.upload_from_file(file_obj, content_type='application/octet-stream')
-            blob.make_public()
-
-            url = blob.public_url
-            logger.info(f"Base64 data uploaded to GCS: {url}")
-            return url
-        except Exception as e:
-            logger.error(f"Failed to upload base64 data to GCS: {e}")
-            raise
-
-class CloudflareR2Provider(StorageProvider):
-    """Cloudflare R2 存储提供商"""
-
-    def __init__(self, bucket_name: str, account_id: str, access_key: str, secret_key: str, public_domain: str = None):
-        try:
-            import boto3
-            self.s3_client = boto3.client(
-                's3',
-                endpoint_url=f'https://{account_id}.r2.cloudflarestorage.com',
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key,
-                region_name='auto'
-            )
-            self.bucket_name = bucket_name
-            self.public_domain = public_domain or f"https://pub-{account_id}.r2.dev"
-        except ImportError:
-            raise ImportError("boto3 is required for Cloudflare R2 provider")
-
-    def upload_file(self, source_file_name: str, destination_path: str) -> str:
-        """上传文件到Cloudflare R2"""
-        try:
-            self.s3_client.upload_file(source_file_name, self.bucket_name, destination_path)
-            logger.info(f"File {source_file_name} uploaded to R2: {destination_path}")
-
-            # 删除本地文件
-            os.remove(source_file_name)
-            logger.info(f"Local file {source_file_name} deleted after upload")
-
-            return f"{self.public_domain}/{destination_path}"
-        except Exception as e:
-            logger.error(f"Failed to upload file to R2: {e}")
-            raise
-
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
-        """上传二进制数据到Cloudflare R2"""
-        logger.info(f"开始上传二进制数据到R2: {destination_path}")
-        logger.debug(f"数据大小: {len(binary_data)} bytes")
-
-        try:
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=destination_path,
-                Body=binary_data
-            )
-            logger.debug(f"R2上传完成")
-
-            url = f"{self.public_domain}/{destination_path}"
-            logger.info(f"R2上传成功: {url}")
-            return url
-        except Exception as e:
-            logger.error(f"R2上传失败: {str(e)}")
-            logger.error(f"失败详情 - 路径: {destination_path}, 数据大小: {len(binary_data)} bytes")
-            raise
-
-    def upload_base64(self, base64_data: str, destination_path: str) -> str:
-        """上传base64数据到Cloudflare R2"""
-        try:
-            file_data = base64.b64decode(base64_data)
-            return self.upload_binary(file_data, destination_path)
-        except Exception as e:
-            logger.error(f"Failed to upload base64 data to R2: {e}")
-            raise
 
 class StorageManager:
     """存储管理器 - 统一管理多种存储提供商"""
@@ -185,7 +37,6 @@ class StorageManager:
 
     def upload_binary(self, binary_data: bytes, destination_path: str, provider: str = None) -> str:
         """上传二进制数据"""
-        # 检查是否已初始化
         if not self.is_initialized():
             raise RuntimeError("存储管理器未初始化，请先调用 initialize() 方法")
 
@@ -224,17 +75,31 @@ class StorageManager:
 
         logger.info("🔧 开始初始化存储管理器...")
 
-        # 清空现有提供商
         self.providers.clear()
         self.default_provider = None
 
-        # 从环境变量获取配置
         storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')
         logger.debug(f"配置的存储提供商: {storage_provider}")
 
-        # 尝试配置GCS
+        # 动态导入和配置提供商
+        self._configure_gcs(storage_provider)
+        self._configure_r2(storage_provider)
+        self._configure_cf_images(storage_provider)
+
+        if not self.providers:
+            logger.warning("⚠️ No storage providers configured, file uploads will be disabled")
+        else:
+            logger.info(f"📦 Storage manager initialized with providers: {list(self.providers.keys())}")
+            logger.info(f"📦 Default provider: {self.default_provider}")
+
+        self._initialized = True
+        logger.info("✅ 存储管理器初始化完成")
+
+    def _configure_gcs(self, storage_provider: str):
+        """配置GCS提供商"""
         if storage_provider == 'gcs' or os.getenv('GCS_BUCKET_NAME'):
             try:
+                from .providers.gcs import GCSProvider
                 gcs_bucket = os.getenv('GCS_BUCKET_NAME', bucket_name)
                 if gcs_bucket:
                     logger.debug(f"配置 GCS bucket: {gcs_bucket}")
@@ -246,9 +111,11 @@ class StorageManager:
             except Exception as e:
                 logger.warning(f"⚠️ Failed to configure GCS provider: {e}")
 
-        # 尝试配置Cloudflare R2
+    def _configure_r2(self, storage_provider: str):
+        """配置Cloudflare R2提供商"""
         if storage_provider == 'r2' or os.getenv('R2_BUCKET_NAME'):
             try:
+                from .providers.cloudflare_r2 import CloudflareR2Provider
                 r2_bucket = os.getenv('R2_BUCKET_NAME')
                 r2_account_id = os.getenv('R2_ACCOUNT_ID')
                 r2_access_key = os.getenv('R2_ACCESS_KEY')
@@ -273,29 +140,46 @@ class StorageManager:
             except Exception as e:
                 logger.warning(f"⚠️ Failed to configure R2 provider: {e}")
 
-        if not self.providers:
-            logger.warning("⚠️ No storage providers configured, file uploads will be disabled")
-        else:
-            logger.info(f"📦 Storage manager initialized with providers: {list(self.providers.keys())}")
-            logger.info(f"📦 Default provider: {self.default_provider}")
+    def _configure_cf_images(self, storage_provider: str):
+        """配置Cloudflare Images提供商"""
+        if storage_provider == 'cf_images' or os.getenv('CF_IMAGES_ACCOUNT_ID'):
+            try:
+                from .providers.cloudflare_images import CloudflareImagesProvider
+                cf_account_id = os.getenv('CF_IMAGES_ACCOUNT_ID')
+                cf_api_token = os.getenv('CF_IMAGES_API_TOKEN')
+                cf_delivery_domain = os.getenv('CF_IMAGES_DELIVERY_DOMAIN')
 
-        self._initialized = True
-        logger.info("✅ 存储管理器初始化完成")
+                if all([cf_account_id, cf_api_token]):
+                    logger.debug(f"配置 Cloudflare Images Account ID: {cf_account_id}")
+                    cf_images_provider = CloudflareImagesProvider(
+                        account_id=cf_account_id,
+                        api_token=cf_api_token,
+                        delivery_domain=cf_delivery_domain
+                    )
+                    self.register_provider('cf_images', cf_images_provider, is_default=(storage_provider == 'cf_images'))
+                    logger.info("✅ Cloudflare Images provider configured")
+                else:
+                    logger.warning("⚠️ Cloudflare Images configuration incomplete, skipping CF Images provider")
+            except ImportError:
+                logger.warning("⚠️ requests not installed, skipping Cloudflare Images provider")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to configure Cloudflare Images provider: {e}")
 
     def is_initialized(self) -> bool:
         """检查存储管理器是否已初始化"""
         return self._initialized and bool(self.providers)
 
+
 def create_storage_manager() -> StorageManager:
     """创建并配置存储管理器"""
     manager = StorageManager()
 
-    # 从环境变量获取配置
     storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')
 
     # 尝试配置GCS
     if storage_provider == 'gcs' or os.getenv('GCS_BUCKET_NAME'):
         try:
+            from .providers.gcs import GCSProvider
             gcs_bucket = os.getenv('GCS_BUCKET_NAME', bucket_name)
             if gcs_bucket:
                 gcs_provider = GCSProvider(gcs_bucket)
@@ -309,6 +193,7 @@ def create_storage_manager() -> StorageManager:
     # 尝试配置Cloudflare R2
     if storage_provider == 'r2' or os.getenv('R2_BUCKET_NAME'):
         try:
+            from .providers.cloudflare_r2 import CloudflareR2Provider
             r2_bucket = os.getenv('R2_BUCKET_NAME')
             r2_account_id = os.getenv('R2_ACCOUNT_ID')
             r2_access_key = os.getenv('R2_ACCESS_KEY')
@@ -332,6 +217,29 @@ def create_storage_manager() -> StorageManager:
         except Exception as e:
             logger.warning(f"⚠️ Failed to configure R2 provider: {e}")
 
+    # 尝试配置Cloudflare Images
+    if storage_provider == 'cf_images' or os.getenv('CF_IMAGES_ACCOUNT_ID'):
+        try:
+            from .providers.cloudflare_images import CloudflareImagesProvider
+            cf_account_id = os.getenv('CF_IMAGES_ACCOUNT_ID')
+            cf_api_token = os.getenv('CF_IMAGES_API_TOKEN')
+            cf_delivery_domain = os.getenv('CF_IMAGES_DELIVERY_DOMAIN')
+
+            if all([cf_account_id, cf_api_token]):
+                cf_images_provider = CloudflareImagesProvider(
+                    account_id=cf_account_id,
+                    api_token=cf_api_token,
+                    delivery_domain=cf_delivery_domain
+                )
+                manager.register_provider('cf_images', cf_images_provider, is_default=(storage_provider == 'cf_images'))
+                logger.info("✅ Cloudflare Images provider configured")
+            else:
+                logger.warning("⚠️ Cloudflare Images configuration incomplete, skipping CF Images provider")
+        except ImportError:
+            logger.warning("⚠️ requests not installed, skipping Cloudflare Images provider")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to configure Cloudflare Images provider: {e}")
+
     if not manager.providers:
         logger.warning("⚠️ No storage providers configured, file uploads will be disabled")
     else:
@@ -339,8 +247,10 @@ def create_storage_manager() -> StorageManager:
 
     return manager
 
+
 # 全局存储管理器实例变量
 _global_storage_manager = None
+
 
 def get_storage_manager() -> StorageManager:
     """获取全局存储管理器实例"""
@@ -349,10 +259,12 @@ def get_storage_manager() -> StorageManager:
         raise RuntimeError("存储管理器未初始化，请先调用 set_storage_manager() 设置实例")
     return _global_storage_manager
 
+
 def set_storage_manager(manager: StorageManager):
     """设置全局存储管理器实例"""
     global _global_storage_manager
     _global_storage_manager = manager
+
 
 def initialize_storage():
     """初始化全局存储管理器"""
@@ -361,7 +273,7 @@ def initialize_storage():
     set_storage_manager(manager)
     return manager
 
-# 向后兼容的接口
+
 def upload_binary_image(binary_data: bytes, destination_path: str) -> str:
     """向后兼容：上传二进制图片"""
     return get_storage_manager().upload_binary(binary_data, destination_path)
