@@ -194,7 +194,11 @@ class ComfyUIProcessor:
 
         logger.debug(f"开始预处理工作流")
 
-        # 遍历工作流中的所有节点
+        # 收集所有需要下载的远程图片URL
+        remote_urls = []
+        url_to_node_mapping = {}  # URL到节点ID的映射
+        
+        # 遍历工作流中的所有节点，收集远程图片URL
         for node_id, node_data in wf_json.items():
             if not isinstance(node_data, dict):
                 continue
@@ -206,18 +210,35 @@ class ComfyUIProcessor:
 
                 if image_service.is_remote_url(image_url):
                     logger.info(f"发现LoadImage节点 {node_id} 包含远程图片: {image_url}")
+                    remote_urls.append(image_url)
+                    if image_url not in url_to_node_mapping:
+                        url_to_node_mapping[image_url] = []
+                    url_to_node_mapping[image_url].append((node_id, inputs))
 
-                    try:
-                        # 使用图片服务下载图片到ComfyUI input目录
-                        local_filename = image_service.download_image(image_url)
-
-                        # 更新节点的image路径为本地文件名
-                        inputs["image"] = local_filename
-                        logger.info(f"✅ 节点 {node_id} 图片已下载并更新路径: {local_filename}")
-
-                    except Exception as e:
-                        logger.error(f"❌ 下载图片失败 {image_url}: {str(e)}")
-                        raise Exception(f"预处理工作流失败：无法下载图片 {image_url}")
+        # 如果有远程图片，使用异步批量下载
+        if remote_urls:
+            logger.info(f"开始批量下载 {len(remote_urls)} 张远程图片")
+            try:
+                # 使用优化的异步批量下载
+                download_results = image_service.download_images_batch_sync(remote_urls)
+                
+                # 更新所有相关节点的图片路径
+                for image_url, local_filename in download_results.items():
+                    if image_url in url_to_node_mapping:
+                        for node_id, inputs in url_to_node_mapping[image_url]:
+                            inputs["image"] = local_filename
+                            logger.info(f"✅ 节点 {node_id} 图片路径已更新: {local_filename}")
+                
+                # 检查是否有下载失败的图片
+                failed_urls = set(remote_urls) - set(download_results.keys())
+                if failed_urls:
+                    failed_urls_str = ', '.join(failed_urls)
+                    logger.error(f"❌ 以下图片下载失败: {failed_urls_str}")
+                    raise Exception(f"预处理工作流失败：无法下载图片 {failed_urls_str}")
+                    
+            except Exception as e:
+                logger.error(f"❌ 批量下载图片失败: {str(e)}")
+                raise Exception(f"预处理工作流失败：{str(e)}")
 
         logger.debug(f"预处理完成")
         return wf_json

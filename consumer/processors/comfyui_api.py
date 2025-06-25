@@ -280,6 +280,9 @@ class ComfyUI:
 
         # 6. 只处理SaveImage节点的输出图像
         output_urls = []
+        upload_tasks = []  # 存储待上传的任务信息
+        
+        # 首先收集所有需要处理的图像
         for node_id, node_output in outputs.items():
             # 检查是否为SaveImage节点
             if prompt.get(node_id, {}).get("class_type") != "SaveImage":
@@ -291,29 +294,70 @@ class ComfyUI:
                 images = node_output["images"]
                 logger.info(f"SaveImage节点 {node_id} 生成了 {len(images)} 张图像")
 
-                for i, image_info in enumerate(images):
+                for image_info in images:
                     try:
                         filename = image_info["filename"]
                         subfolder = image_info.get("subfolder", "")
                         folder_type = image_info.get("type", "output")
 
-                        logger.info(f"处理图像: {filename}")
+                        logger.info(f"收集图像: {filename}")
 
                         # 获取图像数据
                         image_data = self.get_image_from_comfyui(filename, subfolder, folder_type)
 
-                        # 上传到存储
-                        path = f"{datetime.now():%Y%m%d}/{message_id}_{len(output_urls)}.png"
-                        logger.info(f"上传图像到: {path}")
-
-                        url = get_storage_manager().upload_binary(image_data, path)
-                        output_urls.append(f"{cdn_url}/{path}")
-                        logger.info(f"图像上传成功: {url}")
+                        # 生成上传路径
+                        path = f"{datetime.now():%Y%m%d}/{message_id}_{len(upload_tasks)}.png"
+                        
+                        # 添加到上传任务列表
+                        upload_tasks.append({
+                            'image_data': image_data,
+                            'path': path,
+                            'filename': filename
+                        })
 
                     except Exception as e:
-                        logger.error(f"处理图像失败: {filename}, 错误: {str(e)}")
+                        logger.error(f"获取图像失败: {filename}, 错误: {str(e)}")
                         # 继续处理其他图像，不中断整个流程
                         continue
+
+        # 如果有图像需要上传，使用并发上传提升性能
+        if upload_tasks:
+            logger.info(f"开始并发上传 {len(upload_tasks)} 张图像")
+            
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            def upload_single_image(task):
+                """上传单张图像的函数"""
+                try:
+                    logger.info(f"上传图像到: {task['path']}")
+                    url = get_storage_manager().upload_binary(task['image_data'], task['path'])
+                    logger.info(f"图像上传成功: {task['filename']} -> {url}")
+                    return url
+                except Exception as e:
+                    logger.error(f"上传图像失败: {task['filename']}, 错误: {str(e)}")
+                    return None
+            
+            # 使用线程池并发上传
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # 提交所有上传任务
+                future_to_task = {executor.submit(upload_single_image, task): task for task in upload_tasks}
+                
+                # 收集上传结果
+                for future in as_completed(future_to_task):
+                    task = future_to_task[future]
+                    try:
+                        url = future.result()
+                        if url:
+                            # 根据存储提供商类型决定返回的URL格式
+                            storage_manager = get_storage_manager()
+                            if 'cf_images' in storage_manager.providers and storage_manager.default_provider == 'cf_images':
+                                # 对于Cloudflare Images，直接使用返回的URL
+                                output_urls.append(url)
+                            else:
+                                # 对于其他存储，使用CDN URL
+                                output_urls.append(f"{cdn_url}/{task['path']}")
+                    except Exception as e:
+                        logger.error(f"处理上传结果时出错: {str(e)}")
 
         logger.info(f"图像生成完成! 总共生成 {len(output_urls)} 张图片")
         return output_urls

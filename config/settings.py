@@ -45,6 +45,11 @@ r2_access_key = os.getenv('R2_ACCESS_KEY', '')
 r2_secret_key = os.getenv('R2_SECRET_KEY', '')
 r2_public_domain = os.getenv('R2_PUBLIC_DOMAIN', '')
 
+# Cloudflare Images 配置
+cf_images_account_id = os.getenv('CF_IMAGES_ACCOUNT_ID', '')
+cf_images_api_token = os.getenv('CF_IMAGES_API_TOKEN', '')
+cf_images_delivery_domain = os.getenv('CF_IMAGES_DELIVERY_DOMAIN', '')  # 可选的自定义域名
+
 # API签名配置
 API_SECRET_KEY = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 API_SOURCE = "service"
