@@ -100,10 +100,12 @@ class StorageManager:
         if storage_provider == 'gcs' or os.getenv('GCS_BUCKET_NAME'):
             try:
                 from .providers.gcs import GCSProvider
+                from config.settings import cdn_url
                 gcs_bucket = os.getenv('GCS_BUCKET_NAME', bucket_name)
                 if gcs_bucket:
                     logger.debug(f"配置 GCS bucket: {gcs_bucket}")
-                    gcs_provider = GCSProvider(gcs_bucket)
+                    logger.debug(f"配置 GCS CDN URL: {cdn_url}")
+                    gcs_provider = GCSProvider(gcs_bucket, cdn_url=cdn_url)
                     self.register_provider('gcs', gcs_provider, is_default=(storage_provider == 'gcs'))
                     logger.info("✅ GCS provider configured")
             except ImportError:
@@ -180,9 +182,10 @@ def create_storage_manager() -> StorageManager:
     if storage_provider == 'gcs' or os.getenv('GCS_BUCKET_NAME'):
         try:
             from .providers.gcs import GCSProvider
+            from config.settings import cdn_url
             gcs_bucket = os.getenv('GCS_BUCKET_NAME', bucket_name)
             if gcs_bucket:
-                gcs_provider = GCSProvider(gcs_bucket)
+                gcs_provider = GCSProvider(gcs_bucket, cdn_url=cdn_url)
                 manager.register_provider('gcs', gcs_provider, is_default=(storage_provider == 'gcs'))
                 logger.info("✅ GCS provider configured")
         except ImportError:
