@@ -4,15 +4,49 @@ ComfyUI 任务处理器
 import json
 import time
 import requests
+import os
 from datetime import datetime, timezone
 from loguru import logger
+from consumer.processors.comfyui_api import ComfyUI
 
 class ComfyUIProcessor:
     """ComfyUI任务处理器"""
     
     def __init__(self):
-        # 这里可以初始化ComfyUI相关的配置
-        pass
+        # 初始化单例 ComfyUI 客户端
+        self.comfyui_client = None
+        self._init_comfyui_client()
+    
+    def _init_comfyui_client(self):
+        """初始化 ComfyUI 客户端"""
+        try:
+            comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:8188')
+            logger.debug(f"原始ComfyUI URL: {comfyui_url}")
+            
+            # 解析服务器地址
+            if comfyui_url.startswith('http://'):
+                server_address = comfyui_url[7:]  # 移除 'http://'
+            elif comfyui_url.startswith('https://'):
+                server_address = comfyui_url[8:]  # 移除 'https://'
+            else:
+                server_address = comfyui_url
+            
+            logger.info(f"🔗 初始化单例 ComfyUI 客户端，连接到: {server_address}")
+            self.comfyui_client = ComfyUI(server_address=server_address)
+            logger.info("✅ ComfyUI 客户端初始化成功")
+        except Exception as e:
+            logger.error(f"❌ 初始化 ComfyUI 客户端失败: {e}")
+            self.comfyui_client = None
+    
+    def __del__(self):
+        """析构函数，确保连接被正确关闭"""
+        if self.comfyui_client:
+            try:
+                logger.info("🔌 关闭单例 ComfyUI 客户端连接")
+                # ComfyUI 客户端有自己的析构函数会关闭连接
+                self.comfyui_client = None
+            except Exception as e:
+                logger.error(f"关闭 ComfyUI 客户端时出错: {e}")
     
     def process(self, task):
         """处理ComfyUI任务"""
@@ -133,21 +167,13 @@ class ComfyUIProcessor:
 
         try:
             # 使用真实的ComfyUI API
-            from .comfyui_api import ComfyUI
-            from config.settings import comfyui_url
-            logger.debug(f"导入ComfyUI API模块成功")
-
-            # 解析ComfyUI地址
-            logger.debug(f"原始ComfyUI URL: {comfyui_url}")
-            if comfyui_url.startswith('http://'):
-                server_address = comfyui_url[7:]  # 移除 'http://'
-                logger.debug(f"移除http://前缀，服务器地址: {server_address}")
-            else:
-                server_address = comfyui_url
-                logger.debug(f"直接使用服务器地址: {server_address}")
-
-            logger.info(f"创建ComfyUI客户端，连接到: {server_address}")
-            comfyui = ComfyUI(server_address=server_address)
+            # 使用单例客户端，不再每次创建新的
+            if not self.comfyui_client:
+                logger.error("ComfyUI 客户端未初始化")
+                self._init_comfyui_client()
+            
+            comfyui = self.comfyui_client
+            logger.debug(f"使用单例 ComfyUI 客户端，连接复用次数: {comfyui.connection_reuse_count}")
 
             logger.info(f"开始生成图像...")
             logger.debug(f"🎯 调用comfyui.get_images，参数:")
@@ -186,6 +212,19 @@ class ComfyUIProcessor:
             logger.error(f"执行ComfyUI任务时发生异常: {str(e)}")
             logger.error(f"异常类型: {type(e).__name__}")
             logger.debug(f"异常详情:", exc_info=True)
+            
+            # 如果是连接相关的错误，尝试重建客户端
+            error_msg = str(e).lower()
+            if any(keyword in error_msg for keyword in ["connection", "websocket", "refused", "timeout"]):
+                logger.warning("检测到连接错误，将在下次任务时重建连接")
+                self.comfyui_client = None
+                # 可以尝试立即重建连接
+                try:
+                    self._init_comfyui_client()
+                    logger.info("连接已重建")
+                except Exception as reconnect_error:
+                    logger.error(f"重建连接失败: {reconnect_error}")
+            
             raise
     
     def _preprocess_workflow(self, wf_json):

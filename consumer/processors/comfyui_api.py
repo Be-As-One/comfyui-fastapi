@@ -19,9 +19,19 @@ class ComfyUI:
         self.client_id = str(uuid.uuid4())
         self.ws = None
         self.ws_connected = False
-        self.ws = None
-        self.ws_connected = False
+        self.connection_reuse_count = 0  # 统计连接复用次数
+        self.last_activity_time = 0  # 记录最后活动时间
 
+    def check_server_health(self, timeout: int = 2) -> bool:
+        """快速检查 ComfyUI 服务器是否可用"""
+        try:
+            req = urllib.request.Request(f"http://{self.server_address}/system_stats")
+            urllib.request.urlopen(req, timeout=timeout)
+            return True
+        except Exception as e:
+            logger.debug(f"服务器健康检查失败: {str(e)}")
+            return False
+    
     def is_websocket_alive(self) -> bool:
         """检查 WebSocket 连接是否仍然活跃"""
         if not self.ws or not self.ws_connected:
@@ -38,8 +48,10 @@ class ComfyUI:
 
     def connect_websocket(self, max_retries: int = 3):
         """建立 WebSocket 连接，支持重试"""
-        if self.ws_connected and self.is_websocket_alive():
-            logger.debug("WebSocket 已连接且活跃，复用现有连接")
+        # 优化：只检查标志，不发送 ping
+        if self.ws_connected and self.ws:
+            logger.debug(f"WebSocket 已连接，复用现有连接 (复用次数: {self.connection_reuse_count})")
+            self.connection_reuse_count += 1
             return
 
         # 如果连接已断开，先清理
@@ -51,20 +63,33 @@ class ComfyUI:
             self.ws = None
             self.ws_connected = False
 
+        # 在尝试 WebSocket 连接前，先检查 HTTP 服务是否可用
+        if not self.check_server_health():
+            logger.error(f"ComfyUI 服务器 {self.server_address} 不可用")
+            raise ConnectionRefusedError(f"ComfyUI server at {self.server_address} is not available")
+        
         for attempt in range(max_retries):
             try:
-                logger.info(f"建立 WebSocket 连接: {self.server_address} (尝试 {attempt + 1}/{max_retries})")
+                logger.debug(f"建立 WebSocket 连接: {self.server_address} (尝试 {attempt + 1}/{max_retries})")
                 self.ws = websocket.WebSocket()
+                # 设置连接超时，避免无限期阻塞
+                self.ws.settimeout(10)
                 self.ws.connect(f"ws://{self.server_address}/ws?clientId={self.client_id}")
                 self.ws_connected = True
+                self.connection_reuse_count = 0  # 重置复用计数
+                self.last_activity_time = time.time()
                 logger.info("✅ WebSocket 连接建立成功")
                 return
             except Exception as e:
                 logger.warning(f"❌ WebSocket 连接失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
                 self.ws_connected = False
                 if attempt < max_retries - 1:
-                    import time
-                    time.sleep(2 ** attempt)  # 指数退避
+                    # 优化重试间隔：根据错误类型调整
+                    if "Connection refused" in str(e):
+                        retry_delay = 0.5  # 连接拒绝使用短间隔
+                    else:
+                        retry_delay = 0.5 * (2 ** attempt)  # 其他错误：0.5s, 1s, 2s
+                    time.sleep(retry_delay)
                 else:
                     logger.error(f"WebSocket 连接失败，已重试 {max_retries} 次")
                     raise
@@ -74,7 +99,7 @@ class ComfyUI:
         if self.ws and self.ws_connected:
             try:
                 self.ws.close()
-                logger.info("🔌 WebSocket 连接已断开")
+                logger.debug("🔌 WebSocket 连接已断开")
             except Exception as e:
                 logger.warning(f"断开 WebSocket 时警告: {str(e)}")
             finally:
@@ -83,15 +108,14 @@ class ComfyUI:
 
     def ensure_websocket_connection(self):
         """确保 WebSocket 连接正常，如果断开则重连"""
-        if not self.ws_connected or not self.is_websocket_alive():
-            logger.info("WebSocket 连接不可用，正在重新连接...")
+        # 优化：移除 ping 检查，只依赖标志
+        if not self.ws_connected or not self.ws:
+            logger.debug("WebSocket 连接不可用，正在重新连接...")
             self.connect_websocket()
-        else:
-            logger.debug("WebSocket 连接正常")
 
     def queue_prompt(self, prompt: dict) -> str:
         """提交 prompt 到 ComfyUI 队列"""
-        logger.info(f"Queuing prompt to ComfyUI server: {self.server_address}")
+        logger.debug(f"Queuing prompt to ComfyUI server: {self.server_address}")
         logger.debug(f"Prompt data: {json.dumps(prompt, indent=2)}")
 
         payload = json.dumps({"prompt": prompt, "client_id": self.client_id}).encode("utf-8")
@@ -100,7 +124,7 @@ class ComfyUI:
         try:
             response = json.loads(urllib.request.urlopen(req).read())
             prompt_id = response["prompt_id"]
-            logger.info(f"Successfully queued prompt, got prompt_id: {prompt_id}")
+            logger.debug(f"Successfully queued prompt, got prompt_id: {prompt_id}")
             return prompt_id
         except Exception as e:
             logger.error(f"Failed to queue prompt: {str(e)}")
@@ -148,7 +172,7 @@ class ComfyUI:
         if not self.ws_connected or not self.is_websocket_alive():
             self.connect_websocket()
 
-        logger.info(f"等待 prompt {prompt_id} 执行完成...")
+        logger.debug(f"等待 prompt {prompt_id} 执行完成...")
         self.ws.settimeout(timeout)
         start_time = time.time()
 
@@ -167,10 +191,10 @@ class ComfyUI:
                     msg = self.ws.recv()
                     logger.debug(f"收到WebSocket消息 (已等待 {elapsed_time:.2f}s)")
                 except WebSocketTimeoutException:
-                    logger.warning(f"WebSocket接收超时，重试中... (已等待 {elapsed_time:.2f}s)")
+                    logger.debug(f"WebSocket接收超时，重试中... (已等待 {elapsed_time:.2f}s)")
                     continue
                 except websocket.WebSocketConnectionClosedException:
-                    logger.warning("WebSocket 连接已断开，尝试重连...")
+                    logger.debug("WebSocket 连接已断开，尝试重连...")
                     try:
                         self.connect_websocket()
                         continue
@@ -196,9 +220,9 @@ class ComfyUI:
                             # 只处理匹配的 prompt_id 的消息
                             if msg_prompt_id == prompt_id:
                                 if current_node:
-                                    logger.info(f"执行节点: {current_node}")
+                                    logger.debug(f"执行节点: {current_node}")
                                 else:
-                                    logger.info("所有节点执行完成")
+                                    logger.debug("所有节点执行完成")
                                     break  # 执行结束
                             elif msg_prompt_id:
                                 logger.debug(f"收到其他prompt的执行消息: {msg_prompt_id}")
@@ -212,7 +236,7 @@ class ComfyUI:
                             # 每次都打印进度信息（便于调试和监控）
                             progress_percent = (progress_value / progress_max * 100) if progress_max > 0 else 0
                             message = f"执行进度: {progress_value}/{progress_max} ({progress_percent:.1f}%)"
-                            logger.info(message)
+                            logger.debug(message)
 
                             # 智能HTTP回调通知：避免频繁请求
                             current_time = time.time()
@@ -242,7 +266,7 @@ class ComfyUI:
                         logger.debug(f"消息内容: {data}")
                         continue
                     except WebSocketTimeoutException:
-                        logger.warning("WebSocket超时，继续等待...")
+                        logger.debug("WebSocket超时，继续等待...")
                         continue
 
         except Exception as e:
@@ -253,21 +277,21 @@ class ComfyUI:
 
     def get_images(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
         """生成图像并获取结果"""
-        logger.info(f"开始图像生成流程")
+        logger.debug(f"开始图像生成流程")
 
         # 0. 确保 WebSocket 连接正常
         self.ensure_websocket_connection()
 
         # 1. 提交prompt
         prompt_id = self.queue_prompt(prompt)
-        logger.info(f"Prompt已提交: {prompt_id}")
+        logger.debug(f"Prompt已提交: {prompt_id}")
 
         # 2. 等待执行完成
-        logger.info("等待工作流执行完成...")
+        logger.debug("等待工作流执行完成...")
         self.wait_for_completion(prompt_id, timeout, task_id, progress_callback)
 
         # 3. 获取执行历史和结果
-        logger.info("获取执行结果...")
+        logger.debug("获取执行结果...")
         history = self.get_history(prompt_id)
 
         if prompt_id not in history:
@@ -276,7 +300,7 @@ class ComfyUI:
 
         prompt_history = history[prompt_id]
         outputs = prompt_history.get("outputs", {})
-        logger.info(f"找到 {len(outputs)} 个输出节点")
+        logger.debug(f"找到 {len(outputs)} 个输出节点")
 
         # 6. 只处理SaveImage节点的输出图像
         output_urls = []
@@ -292,7 +316,7 @@ class ComfyUI:
 
             if "images" in node_output:
                 images = node_output["images"]
-                logger.info(f"SaveImage节点 {node_id} 生成了 {len(images)} 张图像")
+                logger.debug(f"SaveImage节点 {node_id} 生成了 {len(images)} 张图像")
 
                 for image_info in images:
                     try:
@@ -300,7 +324,7 @@ class ComfyUI:
                         subfolder = image_info.get("subfolder", "")
                         folder_type = image_info.get("type", "output")
 
-                        logger.info(f"收集图像: {filename}")
+                        logger.debug(f"收集图像: {filename}")
 
                         # 获取图像数据
                         image_data = self.get_image_from_comfyui(filename, subfolder, folder_type)
@@ -322,16 +346,16 @@ class ComfyUI:
 
         # 如果有图像需要上传，使用并发上传提升性能
         if upload_tasks:
-            logger.info(f"开始并发上传 {len(upload_tasks)} 张图像")
+            logger.debug(f"开始并发上传 {len(upload_tasks)} 张图像")
             
             from concurrent.futures import ThreadPoolExecutor, as_completed
             
             def upload_single_image(task):
                 """上传单张图像的函数"""
                 try:
-                    logger.info(f"上传图像到: {task['path']}")
+                    logger.debug(f"上传图像到: {task['path']}")
                     url = get_storage_manager().upload_binary(task['image_data'], task['path'])
-                    logger.info(f"图像上传成功: {task['filename']} -> {url}")
+                    logger.debug(f"图像上传成功: {task['filename']} -> {url}")
                     return url
                 except Exception as e:
                     logger.error(f"上传图像失败: {task['filename']}, 错误: {str(e)}")
