@@ -58,6 +58,11 @@ API_SOURCE = "service"
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG')
 LOG_FILE = os.getenv('LOG_FILE', 'logs/app.log')
 
+# ComfyUI 就绪检查配置
+COMFYUI_READY_TIMEOUT = get_env_int('COMFYUI_READY_TIMEOUT', 1000)  # 最长等待 10 分钟
+COMFYUI_READY_INTERVAL = get_env_int('COMFYUI_READY_INTERVAL', 5)  # 每 5 秒检查一次
+COMFYUI_READY_RETRIES = get_env_int('COMFYUI_READY_RETRIES', 200)  # 最多重试 60 次
+
 # 服务器配置
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001

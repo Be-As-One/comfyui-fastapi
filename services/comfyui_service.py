@@ -2,10 +2,11 @@
 ComfyUI 业务逻辑服务
 """
 import json
+import time
 import urllib.request
 from typing import Dict, Any
 from loguru import logger
-from config.settings import comfyui_url
+from config.settings import comfyui_url, COMFYUI_READY_TIMEOUT, COMFYUI_READY_INTERVAL, COMFYUI_READY_RETRIES
 
 
 class ComfyUIService:
@@ -121,6 +122,55 @@ class ComfyUIService:
         except Exception as e:
             logger.error(f"获取队列历史失败: {str(e)}")
             raise
+
+    def wait_for_ready(self) -> bool:
+        """等待 ComfyUI 完全就绪"""
+        logger.info("🔄 等待 ComfyUI 服务就绪...")
+        
+        start_time = time.time()
+        
+        for attempt in range(COMFYUI_READY_RETRIES):
+            try:
+                elapsed_time = time.time() - start_time
+                
+                # 检查是否超时
+                if elapsed_time > COMFYUI_READY_TIMEOUT:
+                    logger.error(f"⏰ ComfyUI 就绪检查超时 ({COMFYUI_READY_TIMEOUT}s)")
+                    return False
+                
+                logger.debug(f"🔍 检查 ComfyUI 状态 (尝试 {attempt + 1}/{COMFYUI_READY_RETRIES}, 已等待 {elapsed_time:.1f}s)")
+                
+                # 1. 检查基本连接
+                server_info = self.get_server_info()
+                if server_info.get("status") != "connected":
+                    raise Exception("服务器连接失败")
+                
+                # 2. 检查系统统计信息
+                system_stats = self.get_system_stats()
+                if not system_stats:
+                    raise Exception("无法获取系统统计信息")
+                
+                # 3. 检查队列状态（确保队列系统正常）
+                queue_status = self.get_queue_status()
+                if queue_status is None:
+                    raise Exception("无法获取队列状态")
+                
+                # 4. 如果所有检查都通过，说明 ComfyUI 已就绪
+                logger.info(f"✅ ComfyUI 服务已就绪 (用时 {elapsed_time:.1f}s)")
+                return True
+                
+            except Exception as e:
+                logger.debug(f"⚠️ ComfyUI 还未就绪: {str(e)}")
+                
+                # 如果还有重试次数，等待后继续
+                if attempt < COMFYUI_READY_RETRIES - 1:
+                    logger.debug(f"💤 等待 {COMFYUI_READY_INTERVAL}s 后重试...")
+                    time.sleep(COMFYUI_READY_INTERVAL)
+                else:
+                    logger.error(f"❌ ComfyUI 在 {COMFYUI_READY_RETRIES} 次尝试后仍未就绪")
+                    return False
+        
+        return False
 
 
 # 创建全局服务实例

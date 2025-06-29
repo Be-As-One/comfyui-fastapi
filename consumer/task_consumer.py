@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from loguru import logger
 from config.settings import consumer_timeout, task_api_url, api_key
 from consumer.processors.comfyui import ComfyUIProcessor
+from services.comfyui_service import comfyui_service
 
 class TaskConsumer:
     """任务消费者"""
@@ -121,6 +122,19 @@ class TaskConsumer:
 async def start_consumer():
     """启动consumer的函数，供main.py调用"""
     logger.info("🚀 ComfyUI Consumer 启动")
+
+    # 等待 ComfyUI 服务就绪
+    logger.info("⏳ 正在等待 ComfyUI 服务就绪...")
+    
+    # 在异步环境中运行同步的就绪检查
+    loop = asyncio.get_event_loop()
+    is_ready = await loop.run_in_executor(None, comfyui_service.wait_for_ready)
+    
+    if not is_ready:
+        logger.error("❌ ComfyUI 服务未就绪，Consumer 启动失败")
+        return
+    
+    logger.info("✅ ComfyUI 服务已就绪，开始启动 Consumer")
 
     # 创建单个consumer
     consumer = TaskConsumer("main-consumer")

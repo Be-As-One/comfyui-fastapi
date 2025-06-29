@@ -51,6 +51,7 @@ async def start_api_server_async(host: str, port: int):
 async def start_consumer_async():
     """异步启动Consumer"""
     await asyncio.sleep(3)  # 等待API服务器启动
+    logger.info("🔄 准备启动 Consumer，将等待 ComfyUI 服务就绪...")
     await start_consumer()
 
 @app.command()
