@@ -7,46 +7,49 @@ import requests
 import os
 from datetime import datetime, timezone
 from loguru import logger
-from consumer.processors.comfyui_api import ComfyUI
+from consumer.processors.comfyui_api import ComfyUI, create_comfyui_client
 
 class ComfyUIProcessor:
     """ComfyUI任务处理器"""
     
     def __init__(self):
-        # 初始化单例 ComfyUI 客户端
-        self.comfyui_client = None
-        self._init_comfyui_client()
+        # 不再预先初始化客户端，而是根据任务动态创建
+        self.client_cache = {}  # 缓存不同工作流的客户端
     
-    def _init_comfyui_client(self):
-        """初始化 ComfyUI 客户端"""
-        try:
-            comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:8188')
-            logger.debug(f"原始ComfyUI URL: {comfyui_url}")
-            
-            # 解析服务器地址
-            if comfyui_url.startswith('http://'):
-                server_address = comfyui_url[7:]  # 移除 'http://'
-            elif comfyui_url.startswith('https://'):
-                server_address = comfyui_url[8:]  # 移除 'https://'
-            else:
-                server_address = comfyui_url
-            
-            logger.info(f"🔗 初始化单例 ComfyUI 客户端，连接到: {server_address}")
-            self.comfyui_client = ComfyUI(server_address=server_address)
-            logger.info("✅ ComfyUI 客户端初始化成功")
-        except Exception as e:
-            logger.error(f"❌ 初始化 ComfyUI 客户端失败: {e}")
-            self.comfyui_client = None
+    def _get_comfyui_client(self, task: dict) -> ComfyUI:
+        """根据任务获取对应的ComfyUI客户端"""
+        workflow_name = task.get("workflow_name")
+        
+        if workflow_name:
+            # 使用工作流特定的客户端
+            if workflow_name not in self.client_cache:
+                logger.info(f"🎯 创建工作流 '{workflow_name}' 的ComfyUI客户端")
+                self.client_cache[workflow_name] = create_comfyui_client(workflow_name=workflow_name)
+            return self.client_cache[workflow_name]
+        else:
+            # 使用默认客户端
+            if "default" not in self.client_cache:
+                logger.info("🔧 创建默认ComfyUI客户端")
+                comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:8188')
+                if comfyui_url.startswith('http://'):
+                    server_address = comfyui_url[7:]
+                elif comfyui_url.startswith('https://'):
+                    server_address = comfyui_url[8:]
+                else:
+                    server_address = comfyui_url
+                self.client_cache["default"] = create_comfyui_client(server_address=server_address)
+            return self.client_cache["default"]
     
     def __del__(self):
         """析构函数，确保连接被正确关闭"""
-        if self.comfyui_client:
-            try:
-                logger.info("🔌 关闭单例 ComfyUI 客户端连接")
-                # ComfyUI 客户端有自己的析构函数会关闭连接
-                self.comfyui_client = None
-            except Exception as e:
-                logger.error(f"关闭 ComfyUI 客户端时出错: {e}")
+        try:
+            logger.info("🔌 关闭所有缓存的 ComfyUI 客户端连接")
+            for workflow_name, client in self.client_cache.items():
+                if client:
+                    logger.debug(f"关闭客户端: {workflow_name}")
+            self.client_cache.clear()
+        except Exception as e:
+            logger.error(f"关闭 ComfyUI 客户端时出错: {e}")
     
     def process(self, task):
         """处理ComfyUI任务"""
@@ -84,9 +87,9 @@ class ComfyUIProcessor:
                 logger.warning(f"更新任务开始状态失败，但继续处理: {task_id}")
 
             # 执行ComfyUI任务处理
-            logger.info(f"开始执行ComfyUI工作流: {task_id}")
+            logger.info(f"🎯 开始执行ComfyUI工作流: {task_id} (工作流: {task.get('workflow_name', '默认')})")
             t_gen_start = time.time()
-            results = self._execute_comfyui_task(wf_json, task_id,task_started_at)
+            results = self._execute_comfyui_task(task, wf_json, task_id, task_started_at)
             execution_time = time.time() - t_gen_start
 
             logger.info(f"图像生成耗时: {execution_time:.2f} 秒")
@@ -161,21 +164,23 @@ class ComfyUIProcessor:
 
 
 
-    def _execute_comfyui_task(self, wf_json, task_id,task_started_at):
+    def _execute_comfyui_task(self, task, wf_json, task_id, task_started_at):
         """执行ComfyUI任务"""
-        logger.debug(f"开始执行ComfyUI工作流: {task_id}")
+        workflow_name = task.get("workflow_name", "默认")
+        environment = task.get("environment", "comm")
+        target_port = task.get("target_port", 3001)
+        
+        logger.debug(f"🎯 开始执行ComfyUI工作流: {task_id}")
+        logger.debug(f"  - 工作流: {workflow_name}")
+        logger.debug(f"  - 环境: {environment}")
+        logger.debug(f"  - 端口: {target_port}")
 
         try:
-            # 使用真实的ComfyUI API
-            # 使用单例客户端，不再每次创建新的
-            if not self.comfyui_client:
-                logger.error("ComfyUI 客户端未初始化")
-                self._init_comfyui_client()
-            
-            comfyui = self.comfyui_client
-            logger.debug(f"使用单例 ComfyUI 客户端，连接复用次数: {comfyui.connection_reuse_count}")
+            # 根据任务获取对应的ComfyUI客户端
+            comfyui = self._get_comfyui_client(task)
+            logger.debug(f"🔗 使用ComfyUI客户端，连接复用次数: {comfyui.connection_reuse_count}")
 
-            logger.info(f"开始生成图像...")
+            logger.info(f"🚀 开始生成图像 (环境: {environment}, 端口: {target_port})...")
             logger.debug(f"🎯 调用comfyui.get_images，参数:")
             logger.debug(f"  - wf_json类型: {type(wf_json)}")
             logger.debug(f"  - task_id: {task_id}")
@@ -185,7 +190,7 @@ class ComfyUIProcessor:
 
             # 创建简单的进度回调函数
             def progress_callback(task_id, status, message):
-                self._update_task_status(task_id, status, message,started_at=task_started_at)
+                self._update_task_status(task_id, status, message, started_at=task_started_at)
 
             results = comfyui.get_images(wf_json, task_id, task_id=task_id, progress_callback=progress_callback)
 

@@ -12,10 +12,19 @@ from websocket import WebSocketTimeoutException
 from loguru import logger
 from core.storage import get_storage_manager
 from config.settings import cdn_url
+from config.environments import environment_manager
 
 class ComfyUI:
-    def __init__(self, server_address="127.0.0.1:8188", cdn_url="https://cdn.undress.ai"):
-        self.server_address = server_address
+    def __init__(self, server_address="127.0.0.1:8188", cdn_url="https://cdn.undress.ai", workflow_name=None):
+        # 如果提供了工作流名称，使用环境管理器获取对应的端口
+        if workflow_name:
+            port = environment_manager.get_port_by_workflow(workflow_name)
+            self.server_address = f"127.0.0.1:{port}"
+            logger.info(f"🎯 根据工作流 '{workflow_name}' 设置ComfyUI地址: {self.server_address}")
+        else:
+            self.server_address = server_address
+            
+        self.workflow_name = workflow_name
         self.client_id = str(uuid.uuid4())
         self.ws = None
         self.ws_connected = False
@@ -389,3 +398,26 @@ class ComfyUI:
     def __del__(self):
         """析构函数，确保 WebSocket 连接被关闭"""
         self.disconnect_websocket()
+
+
+# 工厂方法
+def create_comfyui_client(workflow_name: str = None, server_address: str = None) -> ComfyUI:
+    """
+    创建ComfyUI客户端实例
+    
+    Args:
+        workflow_name: 工作流名称，会自动路由到对应的环境端口
+        server_address: 直接指定服务器地址（如果提供了workflow_name，此参数会被忽略）
+    
+    Returns:
+        ComfyUI客户端实例
+    """
+    if workflow_name:
+        logger.info(f"🎯 创建基于工作流的ComfyUI客户端: {workflow_name}")
+        return ComfyUI(workflow_name=workflow_name)
+    elif server_address:
+        logger.info(f"📍 创建指定地址的ComfyUI客户端: {server_address}")
+        return ComfyUI(server_address=server_address)
+    else:
+        logger.info("🔧 创建默认ComfyUI客户端")
+        return ComfyUI()

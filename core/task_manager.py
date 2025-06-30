@@ -6,6 +6,7 @@ import random
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from config.workflows import WORKFLOW_TEMPLATES
+from config.environments import environment_manager
 
 class TaskManager:
     """任务管理器"""
@@ -22,7 +23,7 @@ class TaskManager:
             self.task_queue.append(task)
             self.tasks_storage[task["taskId"]] = task
     
-    def create_task(self) -> Dict[str, Any]:
+    def create_task(self, workflow_name: str = None) -> Dict[str, Any]:
         """创建新任务"""
         task_id = f"task_{uuid.uuid4().hex[:8]}"
         
@@ -43,8 +44,27 @@ class TaskManager:
             ]
             workflow["6"]["inputs"]["text"] = random.choice(prompts)
         
+        # 确定任务的工作流名称和目标环境
+        if workflow_name:
+            # 验证工作流是否存在
+            available_workflows = environment_manager.get_all_workflows()
+            if workflow_name not in available_workflows:
+                raise ValueError(f"未知的工作流: {workflow_name}. 可用工作流: {available_workflows}")
+        else:
+            # 如果没有指定工作流，随机选择一个可用的工作流
+            available_workflows = environment_manager.get_all_workflows()
+            workflow_name = random.choice(available_workflows) if available_workflows else "basic_generation"
+        
+        # 获取工作流对应的环境信息
+        env_config = environment_manager.get_environment_by_workflow(workflow_name)
+        environment_name = env_config.name if env_config else "comm"
+        target_port = env_config.port if env_config else 3001
+        
         task = {
             "taskId": task_id,
+            "workflow_name": workflow_name,
+            "environment": environment_name,
+            "target_port": target_port,
             "params": {
                 "input_data": {
                     "wf_json": workflow
