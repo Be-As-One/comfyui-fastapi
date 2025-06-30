@@ -30,7 +30,7 @@ class ComfyUIProcessor:
             # 使用默认客户端
             if "default" not in self.client_cache:
                 logger.info("🔧 创建默认ComfyUI客户端")
-                comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:8188')
+                comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:3002')
                 if comfyui_url.startswith('http://'):
                     server_address = comfyui_url[7:]
                 elif comfyui_url.startswith('https://'):
@@ -80,17 +80,22 @@ class ComfyUIProcessor:
             # 记录任务开始时间
             task_started_at = datetime.now(timezone.utc)
 
-            # 更新任务开始状态
-            logger.debug(f"更新任务状态为PROCESSING: {task_id}")
-            update_success = self._update_task_status(task_id, "PROCESSING", started_at=task_started_at)
-            if not update_success:
-                logger.warning(f"更新任务开始状态失败，但继续处理: {task_id}")
-
-            # 执行ComfyUI任务处理
+            # 执行ComfyUI任务处理（包含早期服务检查）
             logger.info(f"🎯 开始执行ComfyUI工作流: {task_id} (工作流: {task.get('workflow_name', '默认')})")
             t_gen_start = time.time()
             results = self._execute_comfyui_task(task, wf_json, task_id, task_started_at)
             execution_time = time.time() - t_gen_start
+
+            # 检查是否为服务不可用
+            if results == "SERVICE_UNAVAILABLE":
+                logger.info(f"📋 任务 {task_id} 因服务不可用被跳过，保持 PENDING 状态")
+                return None  # 返回 None，不更新任务状态
+
+            # 更新任务状态为PROCESSING（只有在服务可用时才更新）
+            logger.debug(f"更新任务状态为PROCESSING: {task_id}")
+            update_success = self._update_task_status(task_id, "PROCESSING", started_at=task_started_at)
+            if not update_success:
+                logger.warning(f"更新任务开始状态失败，但继续处理: {task_id}")
 
             logger.info(f"图像生成耗时: {execution_time:.2f} 秒")
             logger.debug(f"🎯 ComfyUI执行完成，开始分析结果:")
@@ -178,6 +183,15 @@ class ComfyUIProcessor:
         try:
             # 根据任务获取对应的ComfyUI客户端
             comfyui = self._get_comfyui_client(task)
+            
+            # 早期检查：验证 ComfyUI 服务是否可用
+            logger.debug(f"🔍 检查 ComfyUI 服务可用性: {comfyui.server_address}")
+            if not comfyui.check_server_health():
+                logger.warning(f"⚠️  ComfyUI 服务暂时不可用: {comfyui.server_address}")
+                logger.info(f"📋 跳过任务 {task_id}，等待服务恢复")
+                return "SERVICE_UNAVAILABLE"  # 返回特殊值表示服务不可用
+            
+            logger.debug(f"✅ ComfyUI 服务可用，继续处理任务")
             logger.debug(f"🔗 使用ComfyUI客户端，连接复用次数: {comfyui.connection_reuse_count}")
 
             logger.info(f"🚀 开始生成图像 (环境: {environment}, 端口: {target_port})...")
@@ -213,23 +227,29 @@ class ComfyUIProcessor:
         except ImportError as e:
             logger.error(f"导入模块失败: {str(e)}")
             raise
+        except ConnectionRefusedError as e:
+            # 连接被拒绝，说明服务不可用，跳过任务
+            logger.warning(f"⚠️  ComfyUI 连接被拒绝: {str(e)}")
+            logger.info(f"📋 跳过任务 {task_id}，等待服务恢复")
+            return "SERVICE_UNAVAILABLE"
         except Exception as e:
             logger.error(f"执行ComfyUI任务时发生异常: {str(e)}")
             logger.error(f"异常类型: {type(e).__name__}")
             logger.debug(f"异常详情:", exc_info=True)
             
-            # 如果是连接相关的错误，尝试重建客户端
+            # 检查是否为连接相关错误
             error_msg = str(e).lower()
-            if any(keyword in error_msg for keyword in ["connection", "websocket", "refused", "timeout"]):
-                logger.warning("检测到连接错误，将在下次任务时重建连接")
-                self.comfyui_client = None
-                # 可以尝试立即重建连接
-                try:
-                    self._init_comfyui_client()
-                    logger.info("连接已重建")
-                except Exception as reconnect_error:
-                    logger.error(f"重建连接失败: {reconnect_error}")
+            if any(keyword in error_msg for keyword in ["connection", "websocket", "refused", "timeout", "not available"]):
+                logger.warning(f"⚠️  检测到连接错误: {str(e)}")
+                logger.info(f"📋 跳过任务 {task_id}，等待服务恢复")
+                # 清理客户端缓存，下次重新创建
+                workflow_name = task.get("workflow_name")
+                cache_key = workflow_name if workflow_name else "default"
+                if cache_key in self.client_cache:
+                    self.client_cache.pop(cache_key)
+                return "SERVICE_UNAVAILABLE"
             
+            # 其他异常继续抛出，将被标记为 FAILED
             raise
     
     def _preprocess_workflow(self, wf_json):

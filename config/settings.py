@@ -28,7 +28,7 @@ api_key = os.getenv('API_KEY', '')
 consumer_timeout = get_env_int('CONSUMER_TIMEOUT', 30)
 
 # ComfyUI配置
-comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:3001')
+comfyui_url = os.getenv('COMFYUI_URL', 'http://127.0.0.1:3002')
 
 # 存储配置
 storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')  # 'gcs' 或 'r2'
