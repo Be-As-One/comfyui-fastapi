@@ -105,14 +105,13 @@ class TaskConsumer:
         while self.running:
             try:
                 task = await self.fetch_task()
-                await asyncio.sleep(1.5)
                 if task:
                     await self.process_task(task)
                 else:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(1)
             except Exception as e:
                 logger.error(f"Error in consumer loop: {e}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(3)
 
     def stop(self):
         """停止消费者"""
