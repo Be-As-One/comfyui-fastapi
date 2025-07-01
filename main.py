@@ -20,10 +20,54 @@ from config.settings import DEFAULT_HOST, DEFAULT_PORT
 # 设置日志
 setup_logger()
 
+# 初始化 Google Cloud 认证
+def init_google_cloud_auth():
+    """初始化 Google Cloud 认证"""
+    import os
+    import base64
+    import json
+    
+    try:
+        # 从环境变量中读取 Base64 编码的凭据
+        credentials_base64 = os.getenv('GOOGLE_CREDENTIALS_BASE64')
+        credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        
+        if credentials_base64 and credentials_path:
+            logger.info("🔧 解码 Base64 编码的 Google Cloud 凭据")
+            decoded = base64.b64decode(credentials_base64).decode("utf-8")
+            
+            # 验证 JSON 格式
+            json.loads(decoded)
+            
+            # 写入到指定的凭据文件路径
+            with open(credentials_path, 'w', encoding='utf-8') as f:
+                f.write(decoded)
+            
+            logger.info(f"✅ Google Cloud 认证文件已创建: {credentials_path}")
+            return credentials_path
+        
+        # 检查是否已经设置了 GOOGLE_APPLICATION_CREDENTIALS 且文件存在
+        if credentials_path and os.path.exists(credentials_path):
+            logger.info(f"✅ 使用现有的 Google Cloud 认证文件: {credentials_path}")
+            return credentials_path
+        
+        logger.warning("⚠️ 未找到 Google Cloud 认证配置，存储功能可能受限")
+        return None
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Google Cloud 凭据 JSON 格式错误: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ 初始化 Google Cloud 认证失败: {e}")
+        return None
+
 # 初始化存储管理器
 def init_storage():
     """初始化存储管理器"""
     try:
+        # 先初始化 Google Cloud 认证
+        init_google_cloud_auth()
+        
         from core.storage import StorageManager, set_storage_manager
         logger.info("🔧 初始化存储管理器...")
 
@@ -67,6 +111,8 @@ def api(
 @app.command()
 def consumer():
     """只启动Consumer"""
+    # 初始化认证和存储
+    init_storage()
     logger.info("🔧 启动Consumer")
     asyncio.run(start_consumer())
 
