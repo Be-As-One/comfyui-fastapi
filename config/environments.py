@@ -30,14 +30,14 @@ class EnvironmentManager:
     
     def _load_environments(self):
         """加载所有环境配置"""
-        logger.info("🔧 加载环境配置...")
+        logger.info(f"🔧 加载环境配置... {self.config_dir}")
         
         if not self.config_dir.exists():
             logger.warning(f"环境配置目录不存在: {self.config_dir}")
             return
         
-        # 加载所有 JSON 配置文件
-        for config_file in self.config_dir.glob("*.json"):
+        # 加载所有子目录中的 config.json 文件
+        for config_file in self.config_dir.glob("*/config.json"):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)

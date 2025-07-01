@@ -4,7 +4,18 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 from loguru import logger
-from config.settings import bucket_name
+from config.settings import (
+    bucket_name, 
+    storage_provider as default_storage_provider,
+    r2_bucket_name,
+    r2_account_id,
+    r2_access_key,
+    r2_secret_key,
+    r2_public_domain,
+    cf_images_account_id,
+    cf_images_api_token,
+    cf_images_delivery_domain
+)
 from .base import StorageProvider
 
 
@@ -78,13 +89,13 @@ class StorageManager:
         self.providers.clear()
         self.default_provider = None
 
-        storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')
-        logger.debug(f"配置的存储提供商: {storage_provider}")
+        # 直接使用 settings.py 中的配置
+        logger.debug(f"配置的存储提供商: {default_storage_provider}")
 
         # 动态导入和配置提供商
-        self._configure_gcs(storage_provider)
-        self._configure_r2(storage_provider)
-        self._configure_cf_images(storage_provider)
+        self._configure_gcs(default_storage_provider)
+        self._configure_r2(default_storage_provider)
+        self._configure_cf_images(default_storage_provider)
 
         if not self.providers:
             logger.warning("⚠️ No storage providers configured, file uploads will be disabled")
@@ -97,17 +108,16 @@ class StorageManager:
 
     def _configure_gcs(self, storage_provider: str):
         """配置GCS提供商"""
-        if storage_provider == 'gcs' or os.getenv('GCS_BUCKET_NAME'):
+        # 直接使用 settings.py 中的配置（已包含环境变量处理）
+        if storage_provider == 'gcs' and bucket_name:
             try:
                 from .providers.gcs import GCSProvider
                 from config.settings import cdn_url
-                gcs_bucket = os.getenv('GCS_BUCKET_NAME', bucket_name)
-                if gcs_bucket:
-                    logger.debug(f"配置 GCS bucket: {gcs_bucket}")
-                    logger.debug(f"配置 GCS CDN URL: {cdn_url}")
-                    gcs_provider = GCSProvider(gcs_bucket, cdn_url=cdn_url)
-                    self.register_provider('gcs', gcs_provider, is_default=(storage_provider == 'gcs'))
-                    logger.info("✅ GCS provider configured")
+                logger.debug(f"配置 GCS bucket: {bucket_name}")
+                logger.debug(f"配置 GCS CDN URL: {cdn_url}")
+                gcs_provider = GCSProvider(bucket_name, cdn_url=cdn_url)
+                self.register_provider('gcs', gcs_provider, is_default=(storage_provider == 'gcs'))
+                logger.info("✅ GCS provider configured")
             except ImportError:
                 logger.warning("⚠️ google-cloud-storage not installed, skipping GCS provider")
             except Exception as e:
@@ -115,28 +125,20 @@ class StorageManager:
 
     def _configure_r2(self, storage_provider: str):
         """配置Cloudflare R2提供商"""
-        if storage_provider == 'r2' or os.getenv('R2_BUCKET_NAME'):
+        # 直接使用 settings.py 中的配置（已包含环境变量处理）
+        if storage_provider == 'r2' and all([r2_bucket_name, r2_account_id, r2_access_key, r2_secret_key]):
             try:
                 from .providers.cloudflare_r2 import CloudflareR2Provider
-                r2_bucket = os.getenv('R2_BUCKET_NAME')
-                r2_account_id = os.getenv('R2_ACCOUNT_ID')
-                r2_access_key = os.getenv('R2_ACCESS_KEY')
-                r2_secret_key = os.getenv('R2_SECRET_KEY')
-                r2_public_domain = os.getenv('R2_PUBLIC_DOMAIN')
-
-                if all([r2_bucket, r2_account_id, r2_access_key, r2_secret_key]):
-                    logger.debug(f"配置 R2 bucket: {r2_bucket}")
-                    r2_provider = CloudflareR2Provider(
-                        bucket_name=r2_bucket,
+                logger.debug(f"配置 R2 bucket: {r2_bucket_name}")
+                r2_provider = CloudflareR2Provider(
+                        bucket_name=r2_bucket_name,
                         account_id=r2_account_id,
                         access_key=r2_access_key,
                         secret_key=r2_secret_key,
                         public_domain=r2_public_domain
                     )
-                    self.register_provider('r2', r2_provider, is_default=(storage_provider == 'r2'))
-                    logger.info("✅ Cloudflare R2 provider configured")
-                else:
-                    logger.warning("⚠️ R2 configuration incomplete, skipping R2 provider")
+                self.register_provider('r2', r2_provider, is_default=(storage_provider == 'r2'))
+                logger.info("✅ Cloudflare R2 provider configured")
             except ImportError:
                 logger.warning("⚠️ boto3 not installed, skipping R2 provider")
             except Exception as e:
@@ -144,24 +146,18 @@ class StorageManager:
 
     def _configure_cf_images(self, storage_provider: str):
         """配置Cloudflare Images提供商"""
-        if storage_provider == 'cf_images' or os.getenv('CF_IMAGES_ACCOUNT_ID'):
+        # 直接使用 settings.py 中的配置（已包含环境变量处理）
+        if storage_provider == 'cf_images' and all([cf_images_account_id, cf_images_api_token]):
             try:
                 from .providers.cloudflare_images import CloudflareImagesProvider
-                cf_account_id = os.getenv('CF_IMAGES_ACCOUNT_ID')
-                cf_api_token = os.getenv('CF_IMAGES_API_TOKEN')
-                cf_delivery_domain = os.getenv('CF_IMAGES_DELIVERY_DOMAIN')
-
-                if all([cf_account_id, cf_api_token]):
-                    logger.debug(f"配置 Cloudflare Images Account ID: {cf_account_id}")
-                    cf_images_provider = CloudflareImagesProvider(
-                        account_id=cf_account_id,
-                        api_token=cf_api_token,
-                        delivery_domain=cf_delivery_domain
+                logger.debug(f"配置 Cloudflare Images Account ID: {cf_images_account_id}")
+                cf_images_provider = CloudflareImagesProvider(
+                        account_id=cf_images_account_id,
+                        api_token=cf_images_api_token,
+                        delivery_domain=cf_images_delivery_domain
                     )
-                    self.register_provider('cf_images', cf_images_provider, is_default=(storage_provider == 'cf_images'))
-                    logger.info("✅ Cloudflare Images provider configured")
-                else:
-                    logger.warning("⚠️ Cloudflare Images configuration incomplete, skipping CF Images provider")
+                self.register_provider('cf_images', cf_images_provider, is_default=(storage_provider == 'cf_images'))
+                logger.info("✅ Cloudflare Images provider configured")
             except ImportError:
                 logger.warning("⚠️ requests not installed, skipping Cloudflare Images provider")
             except Exception as e:
