@@ -171,7 +171,7 @@ class ComfyUIProcessor:
 
     def _execute_comfyui_task(self, task, wf_json, task_id, task_started_at):
         """执行ComfyUI任务"""
-        workflow_name = task.get("workflow_name", "默认")
+        workflow_name = task.get("workflowName", "默认")
         environment = task.get("environment", "comm")
         target_port = task.get("target_port", 3001)
         
