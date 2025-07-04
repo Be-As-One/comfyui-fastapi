@@ -254,54 +254,46 @@ class ComfyUIProcessor:
     
     def _preprocess_workflow(self, wf_json):
         """预处理工作流"""
-        from services.image_service import image_service
+        from services.media_service import media_service
+        from utils.node_handlers import node_handler_registry
 
         logger.debug(f"开始预处理工作流")
+        logger.debug(f"工作流包含 {len(wf_json)} 个节点")
 
-        # 收集所有需要下载的远程图片URL
-        remote_urls = []
-        url_to_node_mapping = {}  # URL到节点ID的映射
+        # 使用节点处理器注册表收集远程URL
+        logger.debug(f"开始收集远程URL")
+        remote_urls, url_to_node_mapping = node_handler_registry.collect_remote_urls(wf_json)
+        logger.debug(f"收集到 {len(remote_urls)} 个远程URL")
         
-        # 遍历工作流中的所有节点，收集远程图片URL
-        for node_id, node_data in wf_json.items():
-            if not isinstance(node_data, dict):
-                continue
-
-            class_type = node_data.get("class_type")
-            if class_type == "LoadImage":
-                inputs = node_data.get("inputs", {})
-                image_url = inputs.get("image")
-
-                if image_service.is_remote_url(image_url):
-                    logger.info(f"发现LoadImage节点 {node_id} 包含远程图片: {image_url}")
-                    remote_urls.append(image_url)
-                    if image_url not in url_to_node_mapping:
-                        url_to_node_mapping[image_url] = []
-                    url_to_node_mapping[image_url].append((node_id, inputs))
-
-        # 如果有远程图片，使用异步批量下载
+        # 如果有远程资源，使用异步批量下载
         if remote_urls:
-            logger.info(f"开始批量下载 {len(remote_urls)} 张远程图片")
+            logger.info(f"开始批量下载 {len(remote_urls)} 个远程资源")
+            logger.debug(f"远程资源URL列表: {remote_urls}")
+            logger.debug(f"URL到节点的映射关系: {url_to_node_mapping}")
+            
             try:
-                # 使用优化的异步批量下载
-                download_results = image_service.download_images_batch_sync(remote_urls)
+                # 使用媒体服务批量下载（支持图片和音频）
+                logger.debug(f"调用 media_service.download_media_batch_sync 开始下载")
+                download_results = media_service.download_media_batch_sync(remote_urls)
+                logger.debug(f"下载完成，结果: {download_results}")
+                logger.info(f"成功下载 {len(download_results)} 个资源")
                 
-                # 更新所有相关节点的图片路径
-                for image_url, local_filename in download_results.items():
-                    if image_url in url_to_node_mapping:
-                        for node_id, inputs in url_to_node_mapping[image_url]:
-                            inputs["image"] = local_filename
-                            logger.info(f"✅ 节点 {node_id} 图片路径已更新: {local_filename}")
+                # 使用注册表更新工作流路径
+                logger.debug(f"开始更新工作流中的路径")
+                node_handler_registry.update_workflow_paths(wf_json, download_results, url_to_node_mapping)
+                logger.debug(f"工作流路径更新完成")
                 
-                # 检查是否有下载失败的图片
+                # 检查是否有下载失败的资源
                 failed_urls = set(remote_urls) - set(download_results.keys())
                 if failed_urls:
                     failed_urls_str = ', '.join(failed_urls)
-                    logger.error(f"❌ 以下图片下载失败: {failed_urls_str}")
-                    raise Exception(f"预处理工作流失败：无法下载图片 {failed_urls_str}")
+                    logger.error(f"❌ 以下资源下载失败: {failed_urls_str}")
+                    raise Exception(f"预处理工作流失败：无法下载资源 {failed_urls_str}")
+                else:
+                    logger.debug(f"所有资源下载成功")
                     
             except Exception as e:
-                logger.error(f"❌ 批量下载图片失败: {str(e)}")
+                logger.error(f"❌ 批量下载资源失败: {str(e)}")
                 raise Exception(f"预处理工作流失败：{str(e)}")
 
         logger.debug(f"预处理完成")
