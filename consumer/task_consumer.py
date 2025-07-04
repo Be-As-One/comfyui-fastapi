@@ -25,7 +25,7 @@ class TaskConsumer:
         """从任务API获取一个待处理任务"""
         for attempt in range(max_retries):
             try:
-                url = f"{self.api_url}/comfyui-fetch-task"
+                url = f"{self.api_url}/api/comm/task/fetch"
                 logger.debug(f"Fetching task from: {url} (attempt {attempt + 1})")
 
                 async with aiohttp.ClientSession() as session:
@@ -45,10 +45,25 @@ class TaskConsumer:
                             logger.error(f"API返回了非字典类型的数据: {type(response_data)}")
                             return None
 
-                        task_id = response_data.get("taskId")
+                        # 处理新的 API 响应格式
+                        code = response_data.get("code")
+                        message = response_data.get("message", "")
+                        data = response_data.get("data")
+                        success = response_data.get("success", code == 200)
+
+                        if not success:
+                            logger.error(f"API请求失败: code={code}, message={message}")
+                            return None
+
+                        # 从 data 字段中获取任务信息
+                        if not data:
+                            logger.debug("No task available (data is empty)")
+                            return None
+
+                        task_id = data.get("taskId")
                         if task_id:
                             logger.info(f"Got task: {task_id}")
-                            return response_data
+                            return data
                         else:
                             logger.debug("No task available")
                             return None

@@ -326,7 +326,7 @@ class ComfyUIProcessor:
         if output_data:
             logger.debug(f"  - output_data详细内容: {json.dumps(output_data, indent=2, ensure_ascii=False)}")
 
-        url = f"{task_api_url}/comfyui-update-task"
+        url = f"{task_api_url}/api/comm/task/update"
         logger.debug(f"  - 目标URL: {url}")
 
         payload = {
@@ -366,6 +366,17 @@ class ComfyUIProcessor:
                 logger.debug(f"📥 无法读取响应内容: {text_error}")
 
             response.raise_for_status()
+            
+            # 处理新的 API 响应格式
+            response_data = response.json()
+            code = response_data.get("code")
+            message = response_data.get("message", "")
+            success = response_data.get("success", code == 200)
+            
+            if not success:
+                logger.error(f"❌ API返回错误 for task {task_id}: code={code}, message={message}")
+                return False
+                
             logger.info(f"✅ Task update sent successfully for task {task_id}, 耗时{time.time() - t_start:.2f}秒")
             logger.debug(f"✅ 成功发送任务状态更新: {status}")
             return True
