@@ -1,7 +1,6 @@
 """
-ComfyUI节点处理器模块
-
-提供不同类型ComfyUI节点的处理器注册和管理功能
+输入节点服务
+处理工作流中的输入节点，如LoadImage、LoadAudio等
 """
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple, Any, Optional
@@ -9,8 +8,8 @@ from loguru import logger
 from services.media_service import MediaType
 
 
-class NodeHandler(ABC):
-    """节点处理器基类"""
+class InputNodeHandler(ABC):
+    """输入节点处理器基类"""
     
     @abstractmethod
     def can_handle(self, node_data: Dict[str, Any]) -> bool:
@@ -38,7 +37,7 @@ class NodeHandler(ABC):
         pass
 
 
-class LoadImageHandler(NodeHandler):
+class LoadImageHandler(InputNodeHandler):
     """LoadImage节点处理器"""
     
     def can_handle(self, node_data: Dict[str, Any]) -> bool:
@@ -75,7 +74,7 @@ class LoadImageHandler(NodeHandler):
         return MediaType.IMAGE
 
 
-class LoadAudioHandler(NodeHandler):
+class LoadAudioHandler(InputNodeHandler):
     """LoadAudio节点处理器"""
     
     def can_handle(self, node_data: Dict[str, Any]) -> bool:
@@ -112,11 +111,11 @@ class LoadAudioHandler(NodeHandler):
         return MediaType.AUDIO
 
 
-class NodeHandlerRegistry:
-    """节点处理器注册表"""
+class InputNodeService:
+    """输入节点服务"""
     
     def __init__(self):
-        self._handlers: List[NodeHandler] = []
+        self._handlers: List[InputNodeHandler] = []
         self._register_default_handlers()
     
     def _register_default_handlers(self):
@@ -124,12 +123,12 @@ class NodeHandlerRegistry:
         self.register(LoadImageHandler())
         self.register(LoadAudioHandler())
     
-    def register(self, handler: NodeHandler) -> None:
+    def register(self, handler: InputNodeHandler) -> None:
         """注册处理器"""
         self._handlers.append(handler)
-        logger.debug(f"注册节点处理器: {handler.__class__.__name__}")
+        logger.debug(f"注册输入节点处理器: {handler.__class__.__name__}")
     
-    def get_handler(self, node_data: Dict[str, Any]) -> Optional[NodeHandler]:
+    def get_handler(self, node_data: Dict[str, Any]) -> Optional[InputNodeHandler]:
         """获取适合的处理器"""
         for handler in self._handlers:
             if handler.can_handle(node_data):
@@ -216,7 +215,3 @@ class NodeHandlerRegistry:
                         logger.warning(f"⚠️  找不到处理器来更新节点 {node_id}")
             else:
                 logger.warning(f"⚠️  URL {url} 没有对应的节点映射")
-
-
-# 全局注册表实例
-node_handler_registry = NodeHandlerRegistry()

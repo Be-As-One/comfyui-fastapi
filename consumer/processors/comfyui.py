@@ -255,14 +255,14 @@ class ComfyUIProcessor:
     def _preprocess_workflow(self, wf_json):
         """预处理工作流"""
         from services.media_service import media_service
-        from utils.node_handlers import node_handler_registry
+        from services.node_service import node_service
 
         logger.debug(f"开始预处理工作流")
         logger.debug(f"工作流包含 {len(wf_json)} 个节点")
 
         # 使用节点处理器注册表收集远程URL
         logger.debug(f"开始收集远程URL")
-        remote_urls, url_to_node_mapping = node_handler_registry.collect_remote_urls(wf_json)
+        remote_urls, url_to_node_mapping = node_service.collect_remote_urls(wf_json)
         logger.debug(f"收集到 {len(remote_urls)} 个远程URL")
         
         # 如果有远程资源，使用异步批量下载
@@ -280,7 +280,7 @@ class ComfyUIProcessor:
                 
                 # 使用注册表更新工作流路径
                 logger.debug(f"开始更新工作流中的路径")
-                node_handler_registry.update_workflow_paths(wf_json, download_results, url_to_node_mapping)
+                node_service.update_workflow_paths(wf_json, download_results, url_to_node_mapping)
                 logger.debug(f"工作流路径更新完成")
                 
                 # 检查是否有下载失败的资源

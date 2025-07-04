@@ -155,8 +155,8 @@ class ComfyUI:
 
 
 
-    def get_image_from_comfyui(self, filename: str, subfolder: str, folder_type: str) -> bytes:
-        """从ComfyUI获取图像数据"""
+    def get_file_from_comfyui(self, filename: str, subfolder: str, folder_type: str) -> bytes:
+        """从ComfyUI获取文件数据（支持图像、音频等多种类型）"""
         try:
             params = {
                 "filename": filename,
@@ -165,15 +165,16 @@ class ComfyUI:
             }
             url_params = urllib.parse.urlencode(params)
             url = f"http://{self.server_address}/view?{url_params}"
-            logger.debug(f"获取图像: {url}")
+            logger.debug(f"获取文件: {url}")
 
             response = urllib.request.urlopen(url)
-            image_data = response.read()
-            logger.debug(f"图像获取成功: {filename}, 大小: {len(image_data)} bytes")
-            return image_data
+            file_data = response.read()
+            logger.debug(f"文件获取成功: {filename}, 大小: {len(file_data)} bytes")
+            return file_data
         except Exception as e:
-            logger.error(f"获取图像失败: {filename}, 错误: {str(e)}")
+            logger.error(f"获取文件失败: {filename}, 错误: {str(e)}")
             raise
+
 
     def wait_for_completion(self, prompt_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> None:
         """使用WebSocket等待执行完成"""
@@ -284,9 +285,9 @@ class ComfyUI:
             self.ws_connected = False
             raise
 
-    def get_images(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
-        """生成图像并获取结果"""
-        logger.debug(f"开始图像生成流程")
+    def get_workflow_results(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
+        """执行工作流并获取所有结果文件"""
+        logger.debug(f"开始工作流执行流程")
 
         # 0. 确保 WebSocket 连接正常
         self.ensure_websocket_connection()
@@ -311,69 +312,50 @@ class ComfyUI:
         outputs = prompt_history.get("outputs", {})
         logger.debug(f"找到 {len(outputs)} 个输出节点")
 
-        # 6. 只处理SaveImage节点的输出图像
+        # 6. 使用结果节点注册表收集所有结果
         output_urls = []
-        upload_tasks = []  # 存储待上传的任务信息
         
-        # 首先收集所有需要处理的图像
-        for node_id, node_output in outputs.items():
-            # 检查是否为SaveImage节点
-            if prompt.get(node_id, {}).get("class_type") != "SaveImage":
+        # 使用结果节点服务收集所有结果
+        from services.node_service import node_service
+        upload_tasks = node_service.collect_workflow_results(prompt, outputs, message_id)
+        
+        # 处理收集到的上传任务，获取实际的文件数据
+        for task in upload_tasks:
+            try:
+                # ComfyUI的/view端点支持多种文件类型，统一处理
+                file_data = self.get_file_from_comfyui(
+                    task['filename'], 
+                    task['subfolder'], 
+                    task['folder_type']
+                )
+                task['file_data'] = file_data
+                logger.debug(f"收集{task['type']}文件: {task['filename']}")
+            except Exception as e:
+                logger.error(f"获取文件失败: {task['filename']}, 错误: {str(e)}")
                 continue
-                
-            logger.debug(f"处理SaveImage节点 {node_id} 的输出")
 
-            if "images" in node_output:
-                images = node_output["images"]
-                logger.debug(f"SaveImage节点 {node_id} 生成了 {len(images)} 张图像")
-
-                for image_info in images:
-                    try:
-                        filename = image_info["filename"]
-                        subfolder = image_info.get("subfolder", "")
-                        folder_type = image_info.get("type", "output")
-
-                        logger.debug(f"收集图像: {filename}")
-
-                        # 获取图像数据
-                        image_data = self.get_image_from_comfyui(filename, subfolder, folder_type)
-
-                        # 生成上传路径
-                        path = f"{datetime.now():%Y%m%d}/{message_id}_{len(upload_tasks)}.png"
-                        
-                        # 添加到上传任务列表
-                        upload_tasks.append({
-                            'image_data': image_data,
-                            'path': path,
-                            'filename': filename
-                        })
-
-                    except Exception as e:
-                        logger.error(f"获取图像失败: {filename}, 错误: {str(e)}")
-                        # 继续处理其他图像，不中断整个流程
-                        continue
-
-        # 如果有图像需要上传，使用并发上传提升性能
-        if upload_tasks:
-            logger.debug(f"开始并发上传 {len(upload_tasks)} 张图像")
+        # 如果有任务需要上传，使用并发上传提升性能
+        valid_upload_tasks = [task for task in upload_tasks if 'file_data' in task]
+        if valid_upload_tasks:
+            logger.debug(f"开始并发上传 {len(valid_upload_tasks)} 个文件")
             
             from concurrent.futures import ThreadPoolExecutor, as_completed
             
-            def upload_single_image(task):
-                """上传单张图像的函数"""
+            def upload_single_file(task):
+                """上传单个文件的函数"""
                 try:
-                    logger.debug(f"上传图像到: {task['path']}")
-                    url = get_storage_manager().upload_binary(task['image_data'], task['path'])
-                    logger.debug(f"图像上传成功: {task['filename']} -> {url}")
+                    logger.debug(f"上传文件到: {task['path']}")
+                    url = get_storage_manager().upload_binary(task['file_data'], task['path'])
+                    logger.debug(f"文件上传成功: {task['filename']} -> {url}")
                     return url
                 except Exception as e:
-                    logger.error(f"上传图像失败: {task['filename']}, 错误: {str(e)}")
+                    logger.error(f"上传文件失败: {task['filename']}, 错误: {str(e)}")
                     return None
             
             # 使用线程池并发上传
             with ThreadPoolExecutor(max_workers=4) as executor:
                 # 提交所有上传任务
-                future_to_task = {executor.submit(upload_single_image, task): task for task in upload_tasks}
+                future_to_task = {executor.submit(upload_single_file, task): task for task in valid_upload_tasks}
                 
                 # 收集上传结果
                 for future in as_completed(future_to_task):
@@ -392,8 +374,12 @@ class ComfyUI:
                     except Exception as e:
                         logger.error(f"处理上传结果时出错: {str(e)}")
 
-        logger.info(f"图像生成完成! 总共生成 {len(output_urls)} 张图片")
+        logger.info(f"工作流执行完成! 总共生成 {len(output_urls)} 个结果文件")
         return output_urls
+
+    def get_images(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
+        """生成图像并获取结果（向后兼容方法）"""
+        return self.get_workflow_results(prompt, message_id, timeout, task_id, progress_callback)
 
     def __del__(self):
         """析构函数，确保 WebSocket 连接被关闭"""

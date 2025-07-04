@@ -2,7 +2,6 @@
 应用配置设置
 """
 import os
-from typing import Optional
 
 def get_env_bool(key: str, default: bool = False) -> bool:
     """获取布尔类型环境变量"""
@@ -62,6 +61,10 @@ LOG_FILE = os.getenv('LOG_FILE', 'logs/app.log')
 COMFYUI_READY_TIMEOUT = get_env_int('COMFYUI_READY_TIMEOUT', 1000)  # 最长等待 10 分钟
 COMFYUI_READY_INTERVAL = get_env_int('COMFYUI_READY_INTERVAL', 5)  # 每 5 秒检查一次
 COMFYUI_READY_RETRIES = get_env_int('COMFYUI_READY_RETRIES', 200)  # 最多重试 60 次
+
+# 结果节点类型配置
+RESULT_NODE_TYPES = os.getenv('RESULT_NODE_TYPES', 'SaveImage,PreviewImage,SaveAudio').split(',')
+RESULT_NODE_TYPES = [node_type.strip() for node_type in RESULT_NODE_TYPES if node_type.strip()]
 
 # 服务器配置
 DEFAULT_HOST = "0.0.0.0"
