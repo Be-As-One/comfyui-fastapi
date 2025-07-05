@@ -13,12 +13,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 from loguru import logger
 
-# 添加项目根目录到 Python 路径，确保能导入 main.py
-project_root = Path(__file__).parent.parent.parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+# 动态导入 FaceFusion 模块，避免路径冲突
+def _import_facefusion():
+    """安全导入 FaceFusion 模块"""
+    try:
+        # 添加项目根目录到 Python 路径
+        project_root = Path(__file__).parent.parent.parent.parent
+        main_py_path = project_root / "main.py"
+        
+        if not main_py_path.exists():
+            raise ImportError(f"FaceFusion main.py not found at {main_py_path}")
+        
+        # 使用 importlib 动态导入，避免全局 sys.path 修改
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("facefusion_main", main_py_path)
+        facefusion_main = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(facefusion_main)
+        
+        return facefusion_main.ModelSwapper, facefusion_main.convert_mp4
+    except Exception as e:
+        logger.error(f"无法导入 FaceFusion 模块: {e}")
+        raise ImportError(f"FaceFusion 导入失败: {e}")
 
-from main import ModelSwapper, convert_mp4
+# 在模块级别延迟导入
+ModelSwapper = None
+convert_mp4 = None
 
 
 class FaceFusionProcessor:
@@ -33,9 +52,24 @@ class FaceFusionProcessor:
         """懒加载 ModelSwapper，避免启动时初始化"""
         if self.model_swapper is None:
             logger.info("🔧 初始化 FaceFusion ModelSwapper...")
-            self.model_swapper = ModelSwapper()
-            logger.info("✅ ModelSwapper 初始化完成")
+            try:
+                # 动态导入 FaceFusion 模块
+                global ModelSwapper, convert_mp4
+                if ModelSwapper is None:
+                    ModelSwapper, convert_mp4 = _import_facefusion()
+                
+                self.model_swapper = ModelSwapper()
+                logger.info("✅ ModelSwapper 初始化完成")
+            except Exception as e:
+                logger.error(f"❌ ModelSwapper 初始化失败: {e}")
+                raise
         return self.model_swapper
+    
+    def _ensure_facefusion_imported(self):
+        """确保 FaceFusion 模块已导入"""
+        global ModelSwapper, convert_mp4
+        if ModelSwapper is None or convert_mp4 is None:
+            ModelSwapper, convert_mp4 = _import_facefusion()
     
     def process(self, task):
         """处理 FaceSwap 任务"""
@@ -193,6 +227,7 @@ class FaceFusionProcessor:
                     # 生成 GIF
                     gif_path = temp_dir_path / f"output.gif"
                     logger.info(f"🎬 转换为 GIF: {gif_path}")
+                    self._ensure_facefusion_imported()
                     convert_mp4(str(output_path), str(gif_path), "gif")
                     if gif_path.exists():
                         gif_url = self._upload_file(gif_path, f"faceswap_{task_id}_output.gif")
@@ -201,6 +236,7 @@ class FaceFusionProcessor:
                     # 生成 WebP
                     webp_path = temp_dir_path / f"output.webp"
                     logger.info(f"🎬 转换为 WebP: {webp_path}")
+                    self._ensure_facefusion_imported()
                     convert_mp4(str(output_path), str(webp_path), "webp")
                     if webp_path.exists():
                         webp_url = self._upload_file(webp_path, f"faceswap_{task_id}_output.webp")
