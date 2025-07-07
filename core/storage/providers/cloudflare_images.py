@@ -2,7 +2,9 @@
 Cloudflare Images 存储提供商
 """
 import os
+import httpx
 from loguru import logger
+from httpx_retry import RetryTransport
 from ..base import StorageProvider
 
 
@@ -10,19 +12,23 @@ class CloudflareImagesProvider(StorageProvider):
     """Cloudflare Images 存储提供商"""
 
     def __init__(self, account_id: str, api_token: str, delivery_domain: str = None):
-        try:
-            import requests
-            self.account_id = account_id
-            self.api_token = api_token
-            self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/images/v1"
-            self.delivery_domain = delivery_domain or f"https://imagedelivery.net/{account_id}"
-            self.session = requests.Session()
-            self.session.headers.update({
-                "Authorization": f"Bearer {api_token}",
-                "User-Agent": "ComfyUI-FastAPI/1.0"
-            })
-        except ImportError:
-            raise ImportError("requests is required for Cloudflare Images provider")
+        self.account_id = account_id
+        self.api_token = api_token
+        self.base_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/images/v1"
+        self.delivery_domain = delivery_domain or f"https://imagedelivery.net/{account_id}"
+        
+        # 创建带重试功能的HTTP客户端
+        self.retry_transport = RetryTransport(
+            wrapped_transport=httpx.HTTPTransport(),
+            max_attempts=3,
+            backoff_factor=2.0,
+            status_codes={408, 429, 500, 502, 503, 504}
+        )
+        
+        self.headers = {
+            "Authorization": f"Bearer {api_token}",
+            "User-Agent": "ComfyUI-FastAPI/1.0"
+        }
 
     def _get_image_url(self, image_id: str, variant: str = "public") -> str:
         """获取图片的访问URL"""
@@ -69,9 +75,15 @@ class CloudflareImagesProvider(StorageProvider):
             }
 
             logger.debug(f"上传文件到Cloudflare Images，ID: {filename}")
-            response = self.session.post(self.base_url, files=files, data=data, timeout=60)
-
-            if response.status_code == 200:
+            
+            with httpx.Client(
+                transport=self.retry_transport,
+                headers=self.headers,
+                timeout=60.0
+            ) as client:
+                response = client.post(self.base_url, files=files, data=data)
+                response.raise_for_status()
+                
                 result = response.json()
                 if result.get('success'):
                     image_id = result['result']['id']
@@ -86,8 +98,6 @@ class CloudflareImagesProvider(StorageProvider):
                 else:
                     error_msg = result.get('errors', [{'message': 'Unknown error'}])[0]['message']
                     raise Exception(f"Cloudflare Images API error: {error_msg}")
-            else:
-                raise Exception(f"HTTP {response.status_code}: {response.text}")
 
         except Exception as e:
             logger.error(f"Cloudflare Images上传失败: {str(e)}")

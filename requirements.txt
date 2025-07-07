@@ -4,6 +4,8 @@ uvicorn
 typer
 loguru
 requests
+httpx
+httpx-retry
 websocket-client
 pydantic
 

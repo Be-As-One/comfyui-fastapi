@@ -2,9 +2,10 @@
 任务消费者
 """
 import asyncio
-import aiohttp
+import httpx
 from datetime import datetime, timezone
 from loguru import logger
+from httpx_retry import RetryTransport
 from config.settings import consumer_timeout, task_api_url, api_key
 from consumer.processors.comfyui import ComfyUIProcessor
 from services.comfyui_service import comfyui_service
@@ -18,69 +19,65 @@ class TaskConsumer:
         self.running = False
         self.processor = ComfyUIProcessor()
         
+        # 创建带重试功能的传输层
+        self.retry_transport = RetryTransport(
+            wrapped_transport=httpx.AsyncHTTPTransport(),
+            max_attempts=3,  # 总共3次尝试
+            backoff_factor=2.0,  # 指数退避因子
+            status_codes={408, 429, 500, 502, 503, 504}  # 需要重试的状态码
+        )
+        
         logger.info(f"Task consumer {self.name} initialized.")
         logger.info(f"API URL: {self.api_url}")
 
-    async def fetch_task(self, max_retries: int = 3):
+    async def fetch_task(self):
         """从任务API获取一个待处理任务"""
-        for attempt in range(max_retries):
-            try:
-                url = f"{self.api_url}/api/comm/task/fetch"
-                logger.debug(f"Fetching task from: {url} (attempt {attempt + 1})")
-
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                        if not response.ok:
-                            if attempt < max_retries - 1:
-                                logger.warning(f"API request failed: {response.status}, retrying...")
-                                await asyncio.sleep(2 ** attempt)  # 指数退避
-                                continue
-                            else:
-                                logger.error(f"API request failed after {max_retries} attempts: {response.status}")
-                                return None
-
-                        response_data = await response.json()
-
-                        if not isinstance(response_data, dict):
-                            logger.error(f"API返回了非字典类型的数据: {type(response_data)}")
-                            return None
-
-                        # 处理新的 API 响应格式
-                        code = response_data.get("code")
-                        message = response_data.get("message", "")
-                        data = response_data.get("data")
-                        success = response_data.get("success", code == 200)
-
-                        if not success:
-                            logger.error(f"API请求失败: code={code}, message={message}")
-                            return None
-
-                        # 从 data 字段中获取任务信息
-                        if not data:
-                            logger.debug("No task available (data is empty)")
-                            return None
-
-                        task_id = data.get("taskId")
-                        if task_id:
-                            logger.info(f"Got task: {task_id}")
-                            return data
-                        else:
-                            logger.debug("No task available")
-                            return None
-
-            except aiohttp.ClientError as e:
-                if attempt < max_retries - 1:
-                    logger.warning(f"Network error: {e}, retrying...")
-                    await asyncio.sleep(2 ** attempt)
-                    continue
-                else:
-                    logger.error(f"Network error after {max_retries} attempts: {e}")
+        url = f"{self.api_url}/api/comm/task/fetch"
+        logger.debug(f"Fetching task from: {url}")
+        
+        try:
+            async with httpx.AsyncClient(
+                timeout=10.0,
+                transport=self.retry_transport
+            ) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                
+                response_data = await response.json()
+                
+                if not isinstance(response_data, dict):
+                    logger.error(f"API返回了非字典类型的数据: {type(response_data)}")
                     return None
-            except Exception as e:
-                logger.error(f"Unexpected error fetching task: {e}")
-                return None
-
-        return None
+                
+                # 处理新的 API 响应格式
+                code = response_data.get("code")
+                message = response_data.get("message", "")
+                data = response_data.get("data")
+                success = response_data.get("success", code == 200)
+                
+                if not success:
+                    logger.error(f"API请求失败: code={code}, message={message}")
+                    return None
+                
+                # 从 data 字段中获取任务信息
+                if not data:
+                    logger.debug("No task available (data is empty)")
+                    return None
+                
+                task_id = data.get("taskId")
+                if task_id:
+                    logger.info(f"Got task: {task_id}")
+                    return data
+                else:
+                    logger.debug("No task available")
+                    return None
+                    
+        except httpx.HTTPError as e:
+            logger.error(f"Network error fetching task: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching task: {e}")
+            return None
 
     async def process_task(self, task):
         """处理单个任务"""

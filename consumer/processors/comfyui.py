@@ -3,10 +3,11 @@ ComfyUI 任务处理器
 """
 import json
 import time
-import requests
+import httpx
 import os
 from datetime import datetime, timezone
 from loguru import logger
+from httpx_retry import RetryTransport
 from consumer.processors.comfyui_api import ComfyUI, create_comfyui_client
 
 class ComfyUIProcessor:
@@ -15,6 +16,14 @@ class ComfyUIProcessor:
     def __init__(self):
         # 不再预先初始化客户端，而是根据任务动态创建
         self.client_cache = {}  # 缓存不同工作流的客户端
+        
+        # 创建带重试功能的HTTP客户端
+        self.retry_transport = RetryTransport(
+            wrapped_transport=httpx.HTTPTransport(),
+            max_attempts=3,
+            backoff_factor=2.0,
+            status_codes={408, 429, 500, 502, 503, 504}
+        )
     
     def _get_comfyui_client(self, task: dict) -> ComfyUI:
         """根据任务获取对应的ComfyUI客户端"""
@@ -347,32 +356,35 @@ class ComfyUIProcessor:
         try:
             t_start = time.time()
             logger.debug(f"📤 发送POST请求到: {url}")
-            response = requests.post(url, json=payload)
-            logger.debug(f"📥 收到响应状态码: {response.status_code}")
-            logger.debug(f"📥 响应头: {dict(response.headers)}")
-
-            try:
-                response_text = response.text
-                logger.debug(f"📥 响应内容: {response_text}")
-            except Exception as text_error:
-                logger.debug(f"📥 无法读取响应内容: {text_error}")
-
-            response.raise_for_status()
             
-            # 处理新的 API 响应格式
-            response_data = response.json()
-            code = response_data.get("code")
-            message = response_data.get("message", "")
-            success = response_data.get("success", code == 200)
-            
-            if not success:
-                logger.error(f"❌ API返回错误 for task {task_id}: code={code}, message={message}")
-                return False
+            with httpx.Client(transport=self.retry_transport, timeout=30.0) as client:
+                response = client.post(url, json=payload)
+                logger.debug(f"📥 收到响应状态码: {response.status_code}")
+                logger.debug(f"📥 响应头: {dict(response.headers)}")
                 
-            logger.info(f"✅ Task update sent successfully for task {task_id}, 耗时{time.time() - t_start:.2f}秒")
-            logger.debug(f"✅ 成功发送任务状态更新: {status}")
-            return True
-        except requests.exceptions.RequestException as e:
+                try:
+                    response_text = response.text
+                    logger.debug(f"📥 响应内容: {response_text}")
+                except Exception as text_error:
+                    logger.debug(f"📥 无法读取响应内容: {text_error}")
+                
+                response.raise_for_status()
+                
+                # 处理新的 API 响应格式
+                response_data = response.json()
+                code = response_data.get("code")
+                api_message = response_data.get("message", "")
+                success = response_data.get("success", code == 200)
+                
+                if not success:
+                    logger.error(f"❌ API返回错误 for task {task_id}: code={code}, message={api_message}")
+                    return False
+                    
+                logger.info(f"✅ Task update sent successfully for task {task_id}, 耗时{time.time() - t_start:.2f}秒")
+                logger.debug(f"✅ 成功发送任务状态更新: {status}")
+                return True
+                
+        except httpx.HTTPError as e:
             logger.error(f"❌ HTTP请求失败 for task {task_id}: {str(e)}")
             logger.error(f"❌ 请求URL: {url}")
             logger.error(f"❌ 请求payload: {payload}")
