@@ -31,7 +31,8 @@ WORKFLOW_TEMPLATES = {
         },
         "6": {
             "inputs": {
-                "text": "beautiful scenery nature glass bottle landscape, purple galaxy bottle", 
+                "text": "beautiful scenery nature glass bottle landscape, "
+                        "purple galaxy bottle",
                 "clip": ["4", 1]
             },
             "class_type": "CLIPTextEncode"
@@ -48,5 +49,22 @@ WORKFLOW_TEMPLATES = {
             "inputs": {"filename_prefix": "ComfyUI", "images": ["8", 0]},
             "class_type": "SaveImage"
         }
+    },
+
+    # Face swap workflow template
+    "face_swap": {
+        "workflow_type": "face_swap",
+        "description": "Face swap processing via FaceFusion API",
+        "input_nodes": {
+            "source_url": "Source image URL (face to swap)",
+            "target_url": "Target image/video URL",
+            "resolution": "Output resolution (default: 1024x1024)",
+            "model": "Face swapper model (default: inswapper_128_fp16)"
+        },
+        "output_nodes": {
+            "output_path": "Path to processed result",
+            "metadata": "Processing metadata"
+        },
+        "processing_type": "face_swap_api"
     }
 }

@@ -66,6 +66,11 @@ COMFYUI_READY_RETRIES = get_env_int('COMFYUI_READY_RETRIES', 200)  # 最多重�
 RESULT_NODE_TYPES = os.getenv('RESULT_NODE_TYPES', 'SaveImage,PreviewImage,SaveAudio').split(',')
 RESULT_NODE_TYPES = [node_type.strip() for node_type in RESULT_NODE_TYPES if node_type.strip()]
 
+# Face Swap Service 配置
+FACE_SWAP_API_URL = os.getenv('FACE_SWAP_API_URL', 'http://localhost:8000')
+FACE_SWAP_TIMEOUT = get_env_int('FACE_SWAP_TIMEOUT', 300)  # 5 minutes
+FACE_SWAP_RETRY_COUNT = get_env_int('FACE_SWAP_RETRY_COUNT', 3)
+
 # 服务器配置
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8001
