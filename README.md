@@ -1,111 +1,162 @@
-# ComfyUI FastAPI Service
+# 统一AI任务处理服务
 
 [English](README.md) | [中文](README_zh.md)
 
-A production-ready REST API service that transforms [ComfyUI](https://github.com/comfyanonymous/ComfyUI) into a scalable, cloud-native image generation platform. This project provides a complete solution for integrating AI-powered image generation into your applications through simple HTTP APIs.
+一个生产就绪的REST API服务，将[ComfyUI](https://github.com/comfyanonymous/ComfyUI)和[FaceFusion](https://github.com/facefusion/facefusion)整合为可扩展的云原生AI处理平台。通过统一的HTTP API提供图像生成和人脸交换功能。
 
-## 🎯 What is this?
+## 🎯 这是什么？
 
-ComfyUI is a powerful node-based GUI for Stable Diffusion and other AI models, but it's primarily designed for desktop use. **ComfyUI FastAPI Service** bridges this gap by:
+这是一个统一的AI任务处理平台，整合了多种AI处理引擎：
 
-- 🌐 **RESTful API**: Expose ComfyUI workflows through standard HTTP endpoints
-- ⚡ **Async Processing**: Handle multiple image generation requests concurrently
-- 📊 **Queue Management**: Built-in task queue system with status tracking
-- ☁️ **Cloud Storage**: Automatic upload to Google Cloud Storage, Cloudflare R2, or Cloudflare Images
-- 🔄 **Real-time Updates**: WebSocket-based progress monitoring
-- 🚀 **Production Ready**: Error handling, logging, and horizontal scaling support
+- **ComfyUI**: 强大的图像生成工作流引擎
+- **FaceFusion**: 高质量的人脸交换引擎
 
-## 🛠️ Key Features
+**统一FastAPI服务**通过以下特性弥合了各种AI工具的使用差距：
 
-### Task Queue System
-- **Asynchronous Processing**: Submit tasks and get results later
-- **Status Tracking**: Monitor task progress (PENDING → PROCESSING → COMPLETED)
-- **Priority Queue**: Handle tasks based on priority
-- **Auto-retry**: Failed tasks are automatically retried
+- 🌐 **RESTful API**: 通过标准HTTP端点暴露所有AI功能
+- ⚡ **异步处理**: 并发处理多个AI任务请求
+- 📊 **队列管理**: 内置任务队列系统和状态跟踪
+- 🎯 **智能分发**: 根据任务类型自动路由到对应处理器
+- ☁️ **云存储**: 自动上传到Google Cloud Storage、Cloudflare R2或Cloudflare Images
+- 🔄 **实时更新**: 基于WebSocket的进度监控
+- 🚀 **生产就绪**: 错误处理、日志记录和水平扩展支持
 
-### ComfyUI Integration
-- **Full API Coverage**: Access all ComfyUI functionality via REST
-- **Custom Workflows**: Support for any ComfyUI workflow JSON
-- **Remote Images**: Automatically download and process remote image URLs
-- **Progress Callbacks**: Real-time generation progress updates
+## 🛠️ 核心特性
 
-### Cloud Native
-- **Multi-Cloud Storage**: Choose between GCS, Cloudflare R2, and Cloudflare Images
-- **Docker Ready**: Easy containerized deployment
-- **Microservices**: API and Consumer can run independently
-- **Scalable**: Horizontal scaling of consumer instances
+### 统一任务队列系统
+- **异步处理**: 提交任务后异步获取结果
+- **状态跟踪**: 监控任务进度 (PENDING → PROCESSING → COMPLETED)
+- **智能分发**: 根据任务类型自动路由到对应处理器
+- **自动重试**: 失败的任务自动重试
 
-## 🏗️ Architecture
+### AI引擎集成
+- **ComfyUI支持**: 通过REST访问所有ComfyUI功能
+- **FaceFusion支持**: 高质量人脸交换处理
+- **自定义工作流**: 支持任意ComfyUI工作流JSON
+- **远程资源**: 自动下载和处理远程图像/视频URL
+- **进度回调**: 实时生成进度更新
+
+### 云原生架构
+- **多云存储**: 支持GCS、Cloudflare R2和Cloudflare Images
+- **Docker就绪**: 容器化部署
+- **微服务**: API和Consumer可独立运行
+- **可扩展**: Consumer实例水平扩展
+
+## 🏗️ 统一架构
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Your App      │────▶│  FastAPI Server │────▶│  Task Consumer  │
-│   (Client)      │HTTP │  (REST API)     │Queue│  (Worker)       │
+│   Your App      │────▶│  统一API服务器   │────▶│  统一Consumer    │
+│   (客户端)       │HTTP │  (REST API)     │Queue│  (智能分发)      │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                                │                         │
                                ▼                         ▼
                         ┌─────────────────┐     ┌─────────────────┐
-                        │  Task Manager   │     │    ComfyUI      │
-                        │  (SQLite/Redis) │     │   (WebSocket)   │
+                        │  任务管理器      │     │  处理器注册表    │
+                        │  (内存队列)      │     │  (智能路由)      │
                         └─────────────────┘     └─────────────────┘
                                                          │
                                                          ▼
+                                               ┌─────────────────────┐
+                                               │     AI处理器         │
+                                               │ ┌─────────────────┐ │
+                                               │ │ ComfyUI处理器   │ │
+                                               │ │ (图像生成)      │ │
+                                               │ └─────────────────┘ │
+                                               │ ┌─────────────────┐ │
+                                               │ │FaceFusion处理器 │ │
+                                               │ │ (人脸交换)      │ │
+                                               │ └─────────────────┘ │
+                                               └─────────────────────┘
+                                                         │
+                                                         ▼
                                                 ┌─────────────────┐
-                                                │  Cloud Storage  │
-                                                │  (GCS/R2)       │
+                                                │  云存储集成      │
+                                                │ (GCS/R2/CF)     │
                                                 └─────────────────┘
 ```
 
-## 🚀 Quick Start
+## 🚀 快速开始
 
-### Prerequisites
+### 前置要求
 - Python 3.8+
-- Running ComfyUI instance
-- (Recommended) Cloudflare Images account for best performance
-- (Optional) Cloud storage account (GCS or Cloudflare R2)
+- (可选) 运行中的ComfyUI实例 (用于图像生成)
+- (推荐) Cloudflare Images账户以获得最佳性能
+- (可选) 云存储账户 (GCS或Cloudflare R2)
 
-### Installation
+### 安装
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/comfyui-fastapi.git
-cd comfyui-fastapi
+# 克隆仓库
+git clone https://github.com/yourusername/unified-ai-api.git
+cd video-faceswap
 
-# Install dependencies
+# 安装FastAPI依赖
+pip install -r fastapi/requirements.txt
+
+# 安装FaceFusion依赖
 pip install -r requirements.txt
 
-# Configure environment (see Configuration section)
-export COMFYUI_URL=http://localhost:8188
-export STORAGE_PROVIDER=cf_images  # or gcs, r2
+# 配置环境变量
+export COMFYUI_URL=http://localhost:8188  # ComfyUI地址（可选）
+export STORAGE_PROVIDER=gcs               # 或 r2, cf_images
+export GCS_BUCKET_NAME=your-bucket
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
 ```
 
-### Running the Service
+### 启动服务
 
 ```bash
-# Start both API server and task consumer
+cd fastapi
+
+# 启动完整服务（API + Consumer）
 python main.py
 
-# Or run components separately:
-python main.py api      # Just the API server
-python main.py consumer # Just the task consumer
+# 或分别启动：
+python main.py api      # 只启动API服务器
+python main.py consumer # 只启动任务消费者
 ```
 
-### Your First Request
+### 您的第一个请求
 
+#### FaceSwap任务
 ```bash
-# Submit an image generation task
-curl -X POST http://localhost:8000/api/tasks/create \
+# 提交人脸交换任务
+curl -X POST http://localhost:8001/api/faceswap/create \
   -H "Content-Type: application/json" \
   -d '{
-    "workflow": "your-workflow-name",
-    "inputs": {
-      "prompt": "a beautiful landscape",
-      "seed": 12345
+    "source_url": "https://example.com/source_face.jpg",
+    "target_url": "https://example.com/target_video.mp4",
+    "resolution": "1024x1024",
+    "media_type": "video"
+  }'
+```
+
+#### ComfyUI任务
+```bash
+# 提交图像生成任务
+curl -X POST http://localhost:8001/api/tasks/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow_name": "basic_generation",
+    "params": {
+      "input_data": {
+        "wf_json": {
+          "prompt": "a beautiful landscape",
+          "seed": 12345
+        }
+      }
     }
   }'
+```
 
-# Check task status
-curl http://localhost:8000/api/tasks/{task_id}
+#### 检查任务状态
+```bash
+# 查看所有任务
+curl http://localhost:8001/api/tasks
+
+# 查看任务统计
+curl http://localhost:8001/api/stats
 ```
 
 ## 📚 API Documentation
