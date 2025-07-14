@@ -6,6 +6,7 @@ from config.settings import get_task_api_urls
 import httpx
 from loguru import logger
 from consumer.processor_registry import processor_registry
+from httpx_retry import RetryTransport, RetryPolicy
 
 
 class TaskConsumer:
@@ -16,9 +17,17 @@ class TaskConsumer:
         self.api_urls = get_task_api_urls()  # 获取多个API URL
         self.running = False
         self.processor_registry = processor_registry
-
+        self.source_stats = {}
+        self.retry_policy = (
+            RetryPolicy()
+            .with_max_retries(3)
+            .with_min_delay(0.1)
+            .with_multiplier(2)
+            .with_retry_on(lambda status_code: status_code >= 500)
+        )
+        self.retry_transport = RetryTransport(policy=self.retry_policy)
         logger.info(f"统一任务消费者 {self.name} 初始化完成")
-        logger.info(f"API URL: {self.api_urls}")
+        logger.info(f"API URLs: {self.api_urls}")
         logger.info(
             f"支持的处理器: {list(self.processor_registry.list_processors().keys())}")
 
