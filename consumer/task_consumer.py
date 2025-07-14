@@ -2,11 +2,11 @@
 任务消费者
 """
 import asyncio
-from utils import get_task_api_urls
+from config.utils import get_task_api_urls
 import httpx
 from loguru import logger
 from consumer.processor_registry import processor_registry
-from httpx_retry import AsyncRetryTransport, RetryPolicy
+from httpx_retries import RetryTransport, Retry
 
 
 class TaskConsumer:
@@ -18,14 +18,9 @@ class TaskConsumer:
         self.running = False
         self.processor_registry = processor_registry
         self.source_stats = {}
-        self.retry_policy = (
-            RetryPolicy()
-            .with_max_retries(3)
-            .with_min_delay(0.1)
-            .with_multiplier(2)
-            .with_retry_on(lambda status_code: status_code >= 500)
-        )
-        self.retry_transport = AsyncRetryTransport(policy=self.retry_policy)
+        # 使用 httpx-retries 包的配置
+        retry = Retry(total=3, backoff_factor=0.5)
+        self.retry_transport = RetryTransport(retry=retry)
         logger.info(f"统一任务消费者 {self.name} 初始化完成")
         logger.info(f"API URLs: {self.api_urls}")
         logger.info(

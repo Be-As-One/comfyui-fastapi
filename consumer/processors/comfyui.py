@@ -7,7 +7,7 @@ import httpx
 import os
 from datetime import datetime, timezone
 from loguru import logger
-from httpx_retry import RetryTransport, RetryPolicy
+from httpx_retries import RetryTransport, Retry
 from consumer.processors.comfyui_api import ComfyUI, create_comfyui_client
 
 class ComfyUIProcessor:
@@ -18,14 +18,8 @@ class ComfyUIProcessor:
         self.client_cache = {}  # 缓存不同工作流的客户端
         
         # 创建带重试功能的HTTP客户端
-        self.retry_policy = (
-            RetryPolicy()
-            .with_max_retries(3)
-            .with_min_delay(0.1)
-            .with_multiplier(2)
-            .with_retry_on(lambda status_code: status_code >= 500)
-        )
-        self.retry_transport = RetryTransport(policy=self.retry_policy)
+        retry = Retry(total=3, backoff_factor=0.5)
+        self.retry_transport = RetryTransport(retry=retry)
     
     def _get_comfyui_client(self, task: dict) -> ComfyUI:
         """根据任务获取对应的ComfyUI客户端"""

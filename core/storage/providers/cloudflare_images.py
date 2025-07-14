@@ -4,7 +4,7 @@ Cloudflare Images 存储提供商
 import os
 import httpx
 from loguru import logger
-from httpx_retry import AsyncRetryTransport, RetryPolicy
+from httpx_retries import RetryTransport, Retry
 from ..base import StorageProvider
 
 
@@ -18,14 +18,8 @@ class CloudflareImagesProvider(StorageProvider):
         self.delivery_domain = delivery_domain or f"https://imagedelivery.net/{account_id}"
         
         # 创建带重试功能的HTTP客户端
-        self.retry_policy = (
-            RetryPolicy()
-            .with_max_retries(3)
-            .with_min_delay(0.1)
-            .with_multiplier(2)
-            .with_retry_on(lambda status_code: status_code >= 500)
-        )
-        self.retry_transport = AsyncRetryTransport(policy=self.retry_policy)
+        retry = Retry(total=3, backoff_factor=0.5)
+        self.retry_transport = RetryTransport(retry=retry)
         
         self.headers = {
             "Authorization": f"Bearer {api_token}",

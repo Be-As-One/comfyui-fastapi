@@ -5,7 +5,7 @@ typer
 loguru
 requests
 httpx
-httpx-retry
+httpx-retries
 websocket-client
 pydantic
 
