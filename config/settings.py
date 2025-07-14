@@ -2,7 +2,10 @@
 应用配置设置
 """
 import os
-from typing import List
+
+# 服务器配置（优先环境变量）
+DEFAULT_HOST = os.getenv('HOST', '127.0.0.1')
+DEFAULT_PORT = int(os.getenv('PORT', 8001))
 
 def get_env_bool(key: str, default: bool = False) -> bool:
     """获取布尔类型环境变量"""
@@ -15,31 +18,8 @@ def get_env_int(key: str, default: int) -> int:
     except ValueError:
         return default
 
-def parse_task_api_urls(task_api_url: str) -> List[str]:
-    """解析任务API URL配置，支持单个或多个URL（逗号分隔）"""
-    if not task_api_url:
-        return []
-    
-    if ',' in task_api_url:
-        # 多个源：按逗号分割并去除空白
-        urls = [url.strip() for url in task_api_url.split(',')]
-        # 过滤空字符串
-        return [url for url in urls if url]
-    else:
-        # 单个源：直接返回
-        return [task_api_url.strip()]
-
-def get_task_api_urls() -> List[str]:
-    """获取所有配置的任务API URL列表"""
-    task_api_url = os.getenv('TASK_API_URL', f'http://{DEFAULT_HOST}:{DEFAULT_PORT}/api')
-    return parse_task_api_urls(task_api_url)
-
 # 应用环境
 APP_ENV = os.getenv('APP_ENV', 'dev')
-
-# 服务器配置
-DEFAULT_HOST = os.getenv('HOST', '127.0.0.1')
-DEFAULT_PORT = get_env_int('PORT', 8001)
 
 # 任务API配置
 task_api_url = os.getenv('TASK_API_URL', f'http://{DEFAULT_HOST}:{DEFAULT_PORT}/api')
@@ -90,7 +70,3 @@ RESULT_NODE_TYPES = [node_type.strip() for node_type in RESULT_NODE_TYPES if nod
 FACE_SWAP_API_URL = os.getenv('FACE_SWAP_API_URL', 'http://localhost:8000')
 FACE_SWAP_TIMEOUT = get_env_int('FACE_SWAP_TIMEOUT', 300)  # 5 minutes
 FACE_SWAP_RETRY_COUNT = get_env_int('FACE_SWAP_RETRY_COUNT', 3)
-
-# 服务器配置
-DEFAULT_HOST = "0.0.0.0"
-DEFAULT_PORT = 8001

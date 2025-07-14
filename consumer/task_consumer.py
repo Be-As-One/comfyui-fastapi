@@ -2,7 +2,7 @@
 任务消费者
 """
 import asyncio
-from config.settings import get_task_api_urls
+from utils import get_task_api_urls
 import httpx
 from loguru import logger
 from consumer.processor_registry import processor_registry
