@@ -120,7 +120,7 @@ class MediaService:
         # 使用 image_service 的批量下载功能
         # 它已经支持下载任何类型的文件
         logger.info(f"开始批量下载 {len(media_urls)} 个文件")
-        return self.image_service.download_images_batch_sync(media_urls)
+        return self.image_service.download_images_batch(media_urls)
     
     def validate_media_file(self, file_path: str, expected_type: MediaType) -> bool:
         """
