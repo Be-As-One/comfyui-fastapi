@@ -12,7 +12,7 @@ from services.face_swap_service import (
 )
 from core.task_manager import task_manager
 from services.media_service import media_service
-from core.storage.manager import storage_manager
+from core.storage import get_storage_manager
 
 router = APIRouter(prefix="/api/face-swap", tags=["face-swap"])
 
@@ -45,6 +45,7 @@ async def process_face_swap(request: FaceSwapRequest) -> FaceSwapResponse:
                 # Upload result to configured storage
                 local_path = f"/Users/hzy/Code/zhuilai/video-faceswap" \
                            f"{result.output_path}"
+                storage_manager = get_storage_manager()
                 upload_result = await storage_manager.upload_file(
                     local_path,
                     content_type="image/jpeg" if result.metadata and 
