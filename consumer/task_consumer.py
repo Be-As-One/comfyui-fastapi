@@ -18,7 +18,7 @@ class TaskConsumer:
         self.processor_registry = processor_registry
 
         logger.info(f"统一任务消费者 {self.name} 初始化完成")
-        logger.info(f"API URL: {self.api_url}")
+        logger.info(f"API URL: {self.api_urls}")
         logger.info(
             f"支持的处理器: {list(self.processor_registry.list_processors().keys())}")
 
