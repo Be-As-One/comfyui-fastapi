@@ -10,7 +10,7 @@ from pathlib import Path
 from loguru import logger
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Optional
-from httpx_retry import RetryTransport, RetryPolicy
+from httpx_retry import AsyncRetryTransport, RetryPolicy
 
 
 class ImageService:
@@ -33,7 +33,7 @@ class ImageService:
             .with_multiplier(2)
             .with_retry_on(lambda status_code: status_code >= 500)
         )
-        self.retry_transport = RetryTransport(policy=self.retry_policy)
+        self.retry_transport = AsyncRetryTransport(policy=self.retry_policy)
     
     def _generate_filename(self, image_url: str) -> str:
         """生成唯一的本地文件名"""

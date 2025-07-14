@@ -4,7 +4,7 @@ Cloudflare Images 存储提供商
 import os
 import httpx
 from loguru import logger
-from httpx_retry import RetryTransport, RetryPolicy
+from httpx_retry import AsyncRetryTransport, RetryPolicy
 from ..base import StorageProvider
 
 
@@ -25,7 +25,7 @@ class CloudflareImagesProvider(StorageProvider):
             .with_multiplier(2)
             .with_retry_on(lambda status_code: status_code >= 500)
         )
-        self.retry_transport = RetryTransport(policy=self.retry_policy)
+        self.retry_transport = AsyncRetryTransport(policy=self.retry_policy)
         
         self.headers = {
             "Authorization": f"Bearer {api_token}",
