@@ -63,7 +63,7 @@ class TaskConsumer:
                 response = await client.get(url)
                 response.raise_for_status()
 
-                response_data = await response.json()
+                response_data = response.json()
 
                 if not isinstance(response_data, dict):
                     logger.debug(
