@@ -5,7 +5,7 @@ import asyncio
 import httpx
 from loguru import logger
 from httpx_retry import RetryTransport
-from config.settings import task_api_url
+from config.settings import get_task_api_urls
 from consumer.processors.comfyui import ComfyUIProcessor
 from consumer.processors.face_swap import face_swap_processor
 
@@ -15,7 +15,7 @@ class TaskConsumer:
 
     def __init__(self, name: str):
         self.name = name
-        self.api_url = task_api_url
+        self.api_urls = get_task_api_urls()  # 获取多个API URL
         self.running = False
         self.comfyui_processor = ComfyUIProcessor()
         self.face_swap_processor = face_swap_processor
@@ -29,12 +29,39 @@ class TaskConsumer:
         )
 
         logger.info(f"Task consumer {self.name} initialized.")
-        logger.info(f"API URL: {self.api_url}")
+        if len(self.api_urls) == 1:
+            logger.info(f"Single task source configured: {self.api_urls[0]}")
+        else:
+            logger.info(f"Multi-source mode: {len(self.api_urls)} task sources configured:")
+            for i, url in enumerate(self.api_urls, 1):
+                logger.info(f"  Source {i}: {url}")
 
     async def fetch_task(self):
-        """从任务API获取一个待处理任务"""
-        url = f"{self.api_url}/api/comm/task/fetch"
-        logger.debug(f"Fetching task from: {url}")
+        """从多个任务源轮询获取一个待处理任务"""
+        # 轮询所有配置的API源
+        for api_url in self.api_urls:
+            url = f"{api_url}/api/comm/task/fetch"
+            logger.debug(f"Fetching task from: {url}")
+
+            task = await self._try_fetch_from_url(url)
+            if task:
+                logger.info(f"Successfully got task {task.get('taskId')} from: {api_url}")
+                return task
+            else:
+                logger.debug(f"No task available from: {api_url}")
+
+        # 所有源都没有任务
+        logger.debug("No tasks available from any configured source")
+        return None
+
+    async def _try_fetch_from_url(self, url: str):
+        """尝试从单个URL获取任务"""
+        # 获取API基础URL（移除路径部分）
+        api_base_url = url.split('/api/comm/task/fetch')[0]
+
+        # 更新统计信息
+        if api_base_url in self.source_stats:
+            self.source_stats[api_base_url]["attempts"] += 1
 
         try:
             async with httpx.AsyncClient(
@@ -47,7 +74,8 @@ class TaskConsumer:
                 response_data = await response.json()
 
                 if not isinstance(response_data, dict):
-                    logger.error(f"API返回了非字典类型的数据: {type(response_data)}")
+                    logger.debug(
+                        f"API返回了非字典类型的数据: {type(response_data)} from {api_base_url}")
                     return None
 
                 # 处理新的 API 响应格式
@@ -57,27 +85,31 @@ class TaskConsumer:
                 success = response_data.get("success", code == 200)
 
                 if not success:
-                    logger.error(f"API请求失败: code={code}, message={message}")
+                    logger.debug(
+                        f"API请求失败: code={code}, message={message} from {api_base_url}")
                     return None
 
                 # 从 data 字段中获取任务信息
                 if not data:
-                    logger.debug("No task available (data is empty)")
+                    logger.debug(
+                        f"No task available (data is empty) from {api_base_url}")
                     return None
 
                 task_id = data.get("taskId")
                 if task_id:
-                    logger.info(f"Got task: {task_id}")
+                    logger.debug(f"Got task: {task_id} from {api_base_url}")
                     return data
                 else:
-                    logger.debug("No task available")
+                    logger.debug(f"No task available from {api_base_url}")
                     return None
 
         except httpx.HTTPError as e:
-            logger.error(f"Network error fetching task: {e}")
+            logger.debug(
+                f"Network error fetching task from {api_base_url}: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error fetching task: {e}")
+            logger.debug(
+                f"Unexpected error fetching task from {api_base_url}: {e}")
             return None
 
     async def process_task(self, task):
@@ -150,7 +182,6 @@ class TaskConsumer:
         """停止消费者"""
         self.running = False
         logger.info(f"🛑 Consumer {self.name} 停止")
-
 
 async def start_consumer():
     """启动consumer的函数，供main.py调用"""
