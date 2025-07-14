@@ -6,7 +6,7 @@ from config.settings import get_task_api_urls
 import httpx
 from loguru import logger
 from consumer.processor_registry import processor_registry
-from httpx_retry import RetryTransport, RetryPolicy
+from httpx_retry import AsyncRetryTransport, RetryPolicy
 
 
 class TaskConsumer:
@@ -25,7 +25,7 @@ class TaskConsumer:
             .with_multiplier(2)
             .with_retry_on(lambda status_code: status_code >= 500)
         )
-        self.retry_transport = RetryTransport(policy=self.retry_policy)
+        self.retry_transport = AsyncRetryTransport(policy=self.retry_policy)
         logger.info(f"统一任务消费者 {self.name} 初始化完成")
         logger.info(f"API URLs: {self.api_urls}")
         logger.info(
