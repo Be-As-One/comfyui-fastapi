@@ -10,7 +10,7 @@ from pathlib import Path
 from loguru import logger
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Optional
-from httpx_retry import RetryTransport
+from httpx_retry import RetryTransport, RetryPolicy
 
 
 class ImageService:
@@ -25,13 +25,15 @@ class ImageService:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        # 创建带重试功能的传输层
-        self.retry_transport = RetryTransport(
-            wrapped_transport=httpx.AsyncHTTPTransport(),
-            max_attempts=4,  # 总共4次尝试
-            backoff_factor=1.0,  # 指数退避因子
-            status_codes={408, 429, 500, 502, 503, 504}  # 需要重试的状态码
+        # 创建标准的重试策略和传输层
+        self.retry_policy = (
+            RetryPolicy()
+            .with_max_retries(3)
+            .with_min_delay(0.1)
+            .with_multiplier(2)
+            .with_retry_on(lambda status_code: status_code >= 500)
         )
+        self.retry_transport = RetryTransport(policy=self.retry_policy)
     
     def _generate_filename(self, image_url: str) -> str:
         """生成唯一的本地文件名"""
