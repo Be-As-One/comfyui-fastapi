@@ -46,10 +46,6 @@ class TaskConsumer:
         # 获取API基础URL（移除路径部分）
         api_base_url = url.split('/api/comm/task/fetch')[0]
 
-        # 更新统计信息
-        if api_base_url in self.source_stats:
-            self.source_stats[api_base_url]["attempts"] += 1
-
         try:
             async with httpx.AsyncClient(
                 timeout=10.0,
