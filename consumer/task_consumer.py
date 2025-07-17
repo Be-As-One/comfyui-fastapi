@@ -85,6 +85,9 @@ class TaskConsumer:
                 task_id = data.get("taskId")
                 if task_id:
                     logger.debug(f"Got task: {task_id} from {api_base_url}")
+                    # 为任务添加源渠道信息
+                    data["source_channel"] = api_base_url
+                    logger.debug(f"Task {task_id} marked with source_channel: {api_base_url}")
                     return data
                 else:
                     logger.debug(f"No task available from {api_base_url}")

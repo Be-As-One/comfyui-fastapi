@@ -9,6 +9,7 @@ from config.environments import environment_manager
 
 router = APIRouter()
 
+
 class TaskUpdateRequest(BaseModel):
     taskId: str
     status: str
@@ -17,6 +18,7 @@ class TaskUpdateRequest(BaseModel):
     finished_at: str = None
     output_data: Dict[str, Any] = None
 
+
 class FaceSwapTaskRequest(BaseModel):
     """FaceSwap 任务创建请求"""
     source_url: str = Field(..., description="源人脸图像URL")
@@ -24,10 +26,12 @@ class FaceSwapTaskRequest(BaseModel):
     resolution: str = Field(default="1024x1024", description="输出分辨率")
     media_type: str = Field(default="image", description="媒体类型: image 或 video")
 
+
 class UnifiedTaskRequest(BaseModel):
     """统一任务创建请求"""
     workflow_name: str = Field(..., description="工作流名称")
     params: Optional[Dict[str, Any]] = Field(default=None, description="任务参数")
+
 
 @router.get("/comfyui-fetch-task")
 async def fetch_task():
@@ -36,6 +40,7 @@ async def fetch_task():
     if not task:
         return {}
     return task
+
 
 @router.post("/comfyui-update-task")
 async def update_task(request: TaskUpdateRequest):
@@ -48,16 +53,60 @@ async def update_task(request: TaskUpdateRequest):
         finished_at=request.finished_at,
         output_data=request.output_data
     )
-    
+
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     return {"success": True, "message": "Task updated successfully"}
+
+
+@router.get("/comm/task/fetch")
+async def fetch_task_comm():
+    """获取待处理任务 - 统一通信端点"""
+    task = task_manager.get_next_task()
+    if not task:
+        return {
+            "success": True,
+            "code": 200,
+            "message": "No tasks available",
+            "data": None
+        }
+
+    return {
+        "success": True,
+        "code": 200,
+        "message": "Task fetched successfully",
+        "data": task
+    }
+
+
+@router.post("/comm/task/update")
+async def update_task_comm(request: TaskUpdateRequest):
+    """更新任务状态 - 统一通信端点"""
+    success = task_manager.update_task_status(
+        task_id=request.taskId,
+        status=request.status,
+        message=request.task_message,
+        started_at=request.started_at,
+        finished_at=request.finished_at,
+        output_data=request.output_data
+    )
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return {
+        "success": True,
+        "code": 200,
+        "message": "Task updated successfully"
+    }
+
 
 @router.get("/tasks")
 async def list_tasks():
     """列出所有任务（调试用）"""
     return task_manager.get_all_tasks()
+
 
 @router.post("/tasks/create")
 async def create_unified_task(request: UnifiedTaskRequest):
@@ -66,7 +115,7 @@ async def create_unified_task(request: UnifiedTaskRequest):
         # 根据工作流类型验证参数
         if request.workflow_name == "faceswap":
             _validate_faceswap_params(request.params)
-        
+
         task = task_manager.create_task(
             workflow_name=request.workflow_name,
             params=request.params
@@ -81,6 +130,7 @@ async def create_unified_task(request: UnifiedTaskRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
 
+
 @router.post("/faceswap/create")
 async def create_faceswap_task(request: FaceSwapTaskRequest):
     """创建 FaceSwap 任务（便捷接口）"""
@@ -94,13 +144,13 @@ async def create_faceswap_task(request: FaceSwapTaskRequest):
                 "media_type": request.media_type
             }
         }
-        
+
         # 创建任务
         task = task_manager.create_task(
             workflow_name="faceswap",
             params=task_params
         )
-        
+
         return {
             "success": True,
             "taskId": task["taskId"],
@@ -108,9 +158,10 @@ async def create_faceswap_task(request: FaceSwapTaskRequest):
             "message": "FaceSwap 任务创建成功",
             "task": task
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.delete("/tasks/clear")
 async def clear_tasks():
@@ -118,10 +169,12 @@ async def clear_tasks():
     task_manager.clear_all_tasks()
     return {"message": "All tasks cleared"}
 
+
 @router.get("/environments")
 async def get_environments():
     """获取所有环境信息"""
     return environment_manager.get_environment_info()
+
 
 @router.get("/workflows")
 async def get_workflows():
@@ -130,6 +183,7 @@ async def get_workflows():
         "workflows": environment_manager.get_all_workflows(),
         "workflow_mapping": environment_manager.workflow_to_env
     }
+
 
 @router.post("/tasks/create/{workflow_name}")
 async def create_task_with_workflow(workflow_name: str):
@@ -144,11 +198,12 @@ async def create_task_with_workflow(workflow_name: str):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/stats")
 async def get_task_stats():
     """获取任务统计信息"""
     tasks = task_manager.get_all_tasks()
-    
+
     stats = {
         "total": len(tasks),
         "pending": len([t for t in tasks if t.get("status") == "PENDING"]),
@@ -157,7 +212,7 @@ async def get_task_stats():
         "completed": len([t for t in tasks if t.get("status") == "COMPLETED"]),
         "failed": len([t for t in tasks if t.get("status") == "FAILED"])
     }
-    
+
     # 按工作流类型统计
     workflow_stats = {}
     for task in tasks:
@@ -165,41 +220,43 @@ async def get_task_stats():
         if workflow_name not in workflow_stats:
             workflow_stats[workflow_name] = 0
         workflow_stats[workflow_name] += 1
-    
+
     return {
         "success": True,
         "stats": stats,
         "workflow_stats": workflow_stats
     }
 
+
 @router.get("/supported-workflows")
 async def get_supported_workflows():
     """获取支持的工作流类型"""
     from consumer.processor_registry import processor_registry
-    
+
     return {
         "success": True,
         "supported_workflows": processor_registry.get_supported_workflows(),
         "available_processors": processor_registry.list_processors()
     }
 
+
 def _validate_faceswap_params(params: Dict[str, Any]) -> None:
     """验证 FaceSwap 任务参数"""
     if not params:
         raise ValueError("FaceSwap 任务缺少参数")
-    
+
     input_data = params.get("input_data", {})
-    
+
     required_fields = ["source_url", "target_url"]
     for field in required_fields:
         if not input_data.get(field):
             raise ValueError(f"FaceSwap 任务缺少必需参数: {field}")
-    
+
     # 验证 media_type
     media_type = input_data.get("media_type", "image")
     if media_type not in ["image", "video"]:
         raise ValueError(f"不支持的媒体类型: {media_type}")
-    
+
     # 验证 URL 格式
     source_url = input_data.get("source_url")
     target_url = input_data.get("target_url")

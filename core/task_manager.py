@@ -25,7 +25,7 @@ class TaskManager:
             self.tasks_storage[task["taskId"]] = task
 
     def create_task(self, workflow_name: str = None, environment: str = None,
-                    task_data: Dict[str, Any] = None) -> Dict[str, Any]:
+                    task_data: Dict[str, Any] = None, source_channel: str = None) -> Dict[str, Any]:
         """创建新任务"""
         task_id = f"task_{uuid.uuid4().hex[:8]}"
 
@@ -61,7 +61,8 @@ class TaskManager:
                     },
                     "created_at": datetime.now().isoformat(),
                     "updated_at": datetime.now().isoformat(),
-                    "status": "PENDING"
+                    "status": "PENDING",
+                    "source_channel": source_channel  # 添加源渠道信息
                 }
 
                 return task
@@ -115,7 +116,8 @@ class TaskManager:
             },
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
-            "status": "PENDING"
+            "status": "PENDING",
+            "source_channel": source_channel  # 添加源渠道信息
         }
 
         return task

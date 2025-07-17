@@ -24,10 +24,12 @@ def setup_logger():
     # 添加文件处理器
     logger.add(
         LOG_FILE,
-        rotation="10 MB",
-        retention="7 days",
+        rotation="5 MB",
+        retention="14 days",
+        compression="gz",
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-        level="DEBUG"
+        level="INFO",
+        enqueue=True
     )
     
     return logger
