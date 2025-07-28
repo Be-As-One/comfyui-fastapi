@@ -70,3 +70,4 @@ RESULT_NODE_TYPES = [node_type.strip() for node_type in RESULT_NODE_TYPES if nod
 FACE_SWAP_API_URL = os.getenv('FACE_SWAP_API_URL', 'http://localhost:8000')
 FACE_SWAP_TIMEOUT = get_env_int('FACE_SWAP_TIMEOUT', 300)  # 5 minutes
 FACE_SWAP_RETRY_COUNT = get_env_int('FACE_SWAP_RETRY_COUNT', 3)
+FACEFUSION_ROOT = os.getenv('FACEFUSION_ROOT', '/Users/hzy/Code/zhuilai/video-faceswap')

@@ -3,6 +3,7 @@ FaceFusion 任务处理器
 
 处理 FaceSwap 任务，通过 HTTP API 调用 FaceFusion 服务
 """
+import os
 import time
 import asyncio
 import httpx
@@ -113,16 +114,35 @@ class FaceFusionProcessor:
         async with httpx.AsyncClient(timeout=30.0) as client:
             for idx, url in enumerate(urls_to_process):
                 try:
-                    # 下载文件
-                    response = await client.get(url)
-                    response.raise_for_status()
+                    # 特殊处理本地 Face Swap 输出
+                    if url.startswith("http://localhost:8000/outputs/"):
+                        # 直接读取本地文件
+                        from config.settings import FACEFUSION_ROOT
+                        filename = url.split('/')[-1]
+                        local_path = os.path.join(FACEFUSION_ROOT, "outputs", filename)
+                        
+                        if os.path.exists(local_path):
+                            logger.info(f"直接读取本地文件: {local_path}")
+                            with open(local_path, 'rb') as f:
+                                content = f.read()
+                        else:
+                            # 如果文件不存在，尝试从 HTTP 下载
+                            logger.warning(f"本地文件不存在: {local_path}，尝试 HTTP 下载")
+                            response = await client.get(url)
+                            response.raise_for_status()
+                            content = response.content
+                    else:
+                        # 正常下载
+                        response = await client.get(url)
+                        response.raise_for_status()
+                        content = response.content
                     
                     # 生成文件名
                     ext = Path(url.split('?')[0]).suffix or '.jpg'
                     filename = f"faceswap_{task_id}_{idx}{ext}"
                     
                     # 上传到云存储
-                    upload_url = storage_manager.upload_binary(response.content, filename)
+                    upload_url = storage_manager.upload_binary(content, filename)
                     if upload_url:
                         results.append(upload_url)
                     else:
