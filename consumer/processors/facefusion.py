@@ -131,7 +131,8 @@ class FaceFusionProcessor:
                 target_url=target_url,
                 resolution=resolution,
                 media_type=media_type,
-                task_started_at=task_started_at
+                task_started_at=task_started_at,
+                source_channel=source_channel
             )
 
             execution_time = time.time() - t_start
@@ -187,7 +188,7 @@ class FaceFusionProcessor:
 
             return None
 
-    def _execute_faceswap_task(self, task_id, source_url, target_url, resolution, media_type, task_started_at):
+    def _execute_faceswap_task(self, task_id, source_url, target_url, resolution, media_type, task_started_at, source_channel):
         """执行 FaceSwap 任务"""
         logger.info(f"📁 开始下载源文件和目标文件...")
 
