@@ -23,11 +23,14 @@ class FaceSwapProcessor:
         logger.info(f"Processing face swap task with data: {input_data}")
 
         try:
-            # Extract task parameters from unified input_data format
-            source_url = input_data.get("source_url")
-            target_url = input_data.get("target_url")
-            resolution = input_data.get("resolution", "1024x1024")
-            model = input_data.get("model", "inswapper_128_fp16")
+            # Extract wf_json from input_data (same format as ComfyUI)
+            wf_json = input_data.get("wf_json", {})
+            
+            # Extract task parameters from wf_json
+            source_url = wf_json.get("source_url")
+            target_url = wf_json.get("target_url")
+            resolution = wf_json.get("resolution", "1024x1024")
+            model = wf_json.get("model", "inswapper_128_fp16")
 
             if not source_url or not target_url:
                 raise ValueError("Both source_url and target_url are required")

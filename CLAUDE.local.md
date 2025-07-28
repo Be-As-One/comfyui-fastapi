@@ -32,8 +32,10 @@ core/storage/manager.py - 存储管理
     "environment": "face_swap" | "comm",
     "params": {
         "input_data": {
-            # ComfyUI: {"wf_json": {...}}
-            # Face swap: {"source_url": "...", "target_url": "..."}
+            "wf_json": {
+                # ComfyUI: 工作流节点定义
+                # Face swap: {"source_url": "...", "target_url": "...", "resolution": "...", "model": "..."}
+            }
         }
     },
     "status": "PENDING|PROCESSING|COMPLETED|FAILED"
@@ -86,6 +88,7 @@ async def process_task(self, task):
     if workflow_name == "face_swap":
         params = task.get("params", {})
         input_data = params.get("input_data", {})
+        # Face swap 现在也从 wf_json 中提取参数
         result = await self.face_swap_processor.process_task(input_data)
     else:
         # ComfyUI 处理

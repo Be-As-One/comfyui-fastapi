@@ -49,7 +49,7 @@ class TaskManager:
                     raise ValueError(
                         f"Missing required fields: {missing_fields}")
 
-                # 使用与ComfyUI相同的params.input_data格式
+                # 使用与ComfyUI相同的params.input_data.wf_json格式
                 task = {
                     "taskId": task_id,
                     "workflow": workflow_name,  # 使用一致的键名
@@ -57,7 +57,9 @@ class TaskManager:
                     "environment": environment_name,
                     "target_port": target_port,
                     "params": {
-                        "input_data": task_data  # 统一使用params.input_data
+                        "input_data": {
+                            "wf_json": task_data  # 统一使用params.input_data.wf_json
+                        }
                     },
                     "created_at": datetime.now().isoformat(),
                     "updated_at": datetime.now().isoformat(),
