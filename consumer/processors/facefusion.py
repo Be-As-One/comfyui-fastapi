@@ -91,10 +91,15 @@ class FaceFusionProcessor:
         logger.debug(f"  - source_channel: {source_channel}")
 
         # 验证必需参数
-        source_url = input_data.get("source_url")
-        target_url = input_data.get("target_url")
-        resolution = input_data.get("resolution", "1024x1024")
-        media_type = input_data.get("media_type", "image")  # image 或 video
+        # 从 wf_json 中获取参数（统一格式）
+        wf_json = input_data.get("wf_json", {})
+        logger.debug(f"  - wf_json存在: {bool(wf_json)}")
+        logger.debug(f"  - wf_json内容: {wf_json}")
+        source_url = wf_json.get("source_url")
+        target_url = wf_json.get("target_url")
+        resolution = wf_json.get("resolution", "1024x1024")
+        media_type = wf_json.get("media_type", "image")  # image 或 video
+        model = wf_json.get("model", "inswapper_128_fp16")  # 模型参数
 
         if not task_id:
             logger.error("任务ID为空，无法处理")
@@ -103,6 +108,7 @@ class FaceFusionProcessor:
         if not source_url or not target_url:
             logger.error(
                 f"缺少必需参数: source_url={source_url}, target_url={target_url}")
+            logger.error(f"请确保参数在 params.input_data.wf_json 路径下")
             self._update_task_status(
                 task_id, "FAILED", message="缺少源图像或目标文件URL", source_channel=source_channel)
             return None
