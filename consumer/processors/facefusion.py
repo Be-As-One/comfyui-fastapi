@@ -163,23 +163,10 @@ class FaceFusionProcessor:
             if response.status == "success" and response.output_path:
                 logger.info(f"✅ Face Swap API 调用成功: {response.output_path}")
                 
-                # 构建结果 URL
-                # 注意：output_path 可能是相对路径或完整 URL
-                if response.output_path.startswith("http"):
-                    result_url = response.output_path
-                else:
-                    # 如果是相对路径，构建完整 URL
-                    from config.settings import FACE_SWAP_API_URL
-                    result_url = f"{FACE_SWAP_API_URL}{response.output_path}"
-                
-                # 可能有多个输出格式（如视频转换后的 GIF、WebP）
-                results = [result_url]
-                
-                # 如果元数据中包含其他格式的 URL
-                if response.metadata:
-                    for key in ["gif_url", "webp_url"]:
-                        if key in response.metadata and response.metadata[key]:
-                            results.append(response.metadata[key])
+                # 下载并上传结果到云存储
+                results = await self._download_and_upload_results(
+                    response, task_id, task_started_at, source_channel
+                )
                 
                 logger.info(f"📤 处理完成，共 {len(results)} 个文件")
                 return results
@@ -191,6 +178,110 @@ class FaceFusionProcessor:
         except Exception as e:
             logger.error(f"❌ 调用 Face Swap API 失败: {e}")
             raise
+
+    async def _download_and_upload_results(self, response, task_id, task_started_at, source_channel):
+        """下载 Face Swap 结果并上传到云存储"""
+        import httpx
+        import tempfile
+        import os
+        from pathlib import Path
+        from core.storage.manager import get_storage_manager
+        
+        results = []
+        storage_manager = get_storage_manager()
+        
+        # 更新状态
+        self._update_task_status(task_id, "PROCESSING", message="上传结果文件中...",
+                                started_at=task_started_at, source_channel=source_channel)
+        
+        # 构建要处理的文件列表
+        files_to_process = []
+        
+        # 主输出文件
+        if response.output_path.startswith("http"):
+            files_to_process.append({
+                'url': response.output_path,
+                'type': 'main'
+            })
+        else:
+            # 如果是相对路径，构建完整 URL
+            from config.settings import FACE_SWAP_API_URL
+            files_to_process.append({
+                'url': f"{FACE_SWAP_API_URL}{response.output_path}",
+                'type': 'main'
+            })
+        
+        # 额外的输出格式（如 GIF、WebP）
+        if response.metadata:
+            for key in ["gif_url", "webp_url"]:
+                if key in response.metadata and response.metadata[key]:
+                    files_to_process.append({
+                        'url': response.metadata[key],
+                        'type': key.replace('_url', '')
+                    })
+        
+        # 下载并上传每个文件
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for file_info in files_to_process:
+                try:
+                    # 下载文件
+                    logger.info(f"📥 下载文件: {file_info['url']}")
+                    response = await client.get(file_info['url'])
+                    response.raise_for_status()
+                    
+                    # 确定文件扩展名
+                    url_path = file_info['url'].split('?')[0]
+                    ext = Path(url_path).suffix or '.jpg'
+                    
+                    # 生成文件名
+                    filename = f"faceswap_{task_id}_{file_info['type']}{ext}"
+                    
+                    # 创建临时文件
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
+                        tmp_file.write(response.content)
+                        tmp_path = tmp_file.name
+                    
+                    try:
+                        # 上传到云存储
+                        logger.info(f"📤 上传到云存储: {filename}")
+                        
+                        # 读取文件内容
+                        with open(tmp_path, 'rb') as f:
+                            file_content = f.read()
+                        
+                        # 确定内容类型
+                        content_type = "image/jpeg"
+                        if ext in ['.mp4', '.mov']:
+                            content_type = "video/mp4"
+                        elif ext == '.gif':
+                            content_type = "image/gif"
+                        elif ext == '.webp':
+                            content_type = "image/webp"
+                        elif ext == '.png':
+                            content_type = "image/png"
+                        
+                        # 上传文件
+                        url = storage_manager.upload_binary(file_content, filename)
+                        
+                        if url:
+                            logger.info(f"✅ 文件上传成功: {url}")
+                            results.append(url)
+                        else:
+                            logger.error(f"❌ 文件上传失败: 返回 None")
+                            # 如果上传失败，返回原始 URL
+                            results.append(file_info['url'])
+                    
+                    finally:
+                        # 清理临时文件
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                
+                except Exception as e:
+                    logger.error(f"处理文件时出错 {file_info['url']}: {e}")
+                    # 如果处理失败，返回原始 URL
+                    results.append(file_info['url'])
+        
+        return results
 
     def _update_task_status(self, task_id, status, message=None,
                             started_at=None, finished_at=None, output_data=None, source_channel=None):

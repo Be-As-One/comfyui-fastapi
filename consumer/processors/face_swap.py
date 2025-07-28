@@ -25,11 +25,11 @@ class FaceSwapProcessor:
         try:
             # Extract wf_json from input_data (same format as ComfyUI)
             wf_json = input_data.get("wf_json", {})
-            
+
             # Extract task parameters from wf_json
             source_url = wf_json.get("source_url")
             target_url = wf_json.get("target_url")
-            resolution = wf_json.get("resolution", "1024x1024")
+            resolution = wf_json.get("resolution", "auto")
             model = wf_json.get("model", "inswapper_128_fp16")
 
             if not source_url or not target_url:
