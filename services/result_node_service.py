@@ -176,19 +176,32 @@ class VHS_VideoCombineResultHandler(ResultNodeHandler):
                     folder_type = gif_info.get("type", "output")
                     format_type = gif_info.get("format", "image/gif")
                     
-                    # 目前只处理图像格式
-                    if format_type and format_type.startswith('image'):
-                        logger.debug(f"收集图像/GIF: {filename}")
+                    # 处理图像和视频格式
+                    if format_type and (format_type.startswith('image') or format_type.startswith('video')):
+                        # 根据格式确定文件类型
+                        file_type = 'video' if format_type.startswith('video') else 'image'
+                        logger.debug(f"收集{file_type}文件: {filename} (格式: {format_type})")
                         
                         # 生成上传路径
                         from datetime import datetime
                         import os
-                        file_ext = os.path.splitext(filename)[1] or '.gif'
+                        file_ext = os.path.splitext(filename)[1]
+                        if not file_ext:
+                            # 根据格式类型推断扩展名
+                            if 'mp4' in format_type:
+                                file_ext = '.mp4'
+                            elif 'webm' in format_type:
+                                file_ext = '.webm'
+                            elif 'gif' in format_type:
+                                file_ext = '.gif'
+                            else:
+                                file_ext = '.mp4'  # 默认使用mp4
+                        
                         path = f"{datetime.now():%Y%m%d}/{message_id}_vhs_{len(upload_tasks)}{file_ext}"
                         
                         # 添加到上传任务列表
                         upload_tasks.append({
-                            'type': 'image',
+                            'type': file_type,
                             'filename': filename,
                             'subfolder': subfolder,
                             'folder_type': folder_type,
@@ -196,7 +209,7 @@ class VHS_VideoCombineResultHandler(ResultNodeHandler):
                             'node_id': node_id
                         })
                     else:
-                        logger.debug(f"跳过非图像格式: {format_type}")
+                        logger.debug(f"跳过不支持的格式: {format_type}")
                         
                 except Exception as e:
                     logger.error(f"收集VHS输出失败: {gif_info}, 错误: {str(e)}")
@@ -242,21 +255,30 @@ class VHS_VideoCombineResultHandler(ResultNodeHandler):
                             params = widget_value["params"]
                             format_type = params.get("format", "")
                             
-                            # 只处理图像格式，跳过视频
-                            if format_type.startswith('image'):
+                            # 处理图像和视频格式
+                            if format_type.startswith('image') or format_type.startswith('video'):
                                 filename = params.get("filename")
                                 if filename:
-                                    logger.debug(f"收集preview图像: {filename}")
+                                    file_type = 'video' if format_type.startswith('video') else 'image'
+                                    logger.debug(f"收集preview {file_type}: {filename}")
                                     
                                     # 生成上传路径  
                                     from datetime import datetime
                                     import os
-                                    file_ext = os.path.splitext(filename)[1] or '.png'
+                                    file_ext = os.path.splitext(filename)[1]
+                                    if not file_ext:
+                                        if 'mp4' in format_type:
+                                            file_ext = '.mp4'
+                                        elif 'webm' in format_type:
+                                            file_ext = '.webm'
+                                        else:
+                                            file_ext = '.png'
+                                    
                                     path = f"{datetime.now():%Y%m%d}/{message_id}_vhs_preview_{len(upload_tasks)}{file_ext}"
                                     
                                     # 添加到上传任务列表
                                     upload_tasks.append({
-                                        'type': 'image',
+                                        'type': file_type,
                                         'filename': filename,
                                         'subfolder': params.get('subfolder', ''),
                                         'folder_type': params.get('type', 'output'),
@@ -264,7 +286,7 @@ class VHS_VideoCombineResultHandler(ResultNodeHandler):
                                         'node_id': node_id
                                     })
                             else:
-                                logger.debug(f"跳过非图像preview格式: {format_type}")
+                                logger.debug(f"跳过不支持的preview格式: {format_type}")
                                 
                 except Exception as e:
                     logger.error(f"处理widget失败: {widget}, 错误: {str(e)}")
@@ -272,7 +294,7 @@ class VHS_VideoCombineResultHandler(ResultNodeHandler):
     
     def get_result_type(self) -> str:
         """获取结果类型"""
-        return "image"  # 目前只返回图像
+        return "video"  # VHS_VideoCombine 主要用于视频合成
 
 
 class SaveAudioResultHandler(ResultNodeHandler):
