@@ -130,6 +130,151 @@ class PreviewImageResultHandler(ResultNodeHandler):
         return "image"
 
 
+class VHS_VideoCombineResultHandler(ResultNodeHandler):
+    """VHS_VideoCombine结果节点处理器"""
+    
+    def can_handle(self, node_data: Dict[str, Any]) -> bool:
+        """判断是否为VHS_VideoCombine节点"""
+        return node_data.get("class_type") == "VHS_VideoCombine"
+    
+    def _parse_url_path(self, url_path: str) -> Optional[Dict[str, str]]:
+        """解析URL路径以提取文件信息"""
+        try:
+            # 解析类似 "/view?filename=xxx&subfolder=xxx&type=xxx&format=xxx" 的URL
+            if url_path.startswith("/view?"):
+                from urllib.parse import parse_qs, urlparse
+                parsed = urlparse(url_path)
+                params = parse_qs(parsed.query)
+                
+                return {
+                    "filename": params.get("filename", [""])[0],
+                    "subfolder": params.get("subfolder", [""])[0],
+                    "type": params.get("type", ["output"])[0],
+                    "format": params.get("format", ["image/png"])[0]
+                }
+            return None
+        except Exception as e:
+            logger.error(f"解析URL路径失败: {url_path}, 错误: {str(e)}")
+            return None
+    
+    def collect_results(self, node_id: str, node_data: Dict[str, Any], node_output: Dict[str, Any], 
+                       message_id: str, upload_tasks: List[Dict[str, Any]]) -> None:
+        """收集VHS_VideoCombine节点的输出（目前只处理图像）"""
+        logger.debug(f"处理VHS_VideoCombine节点 {node_id} 的输出")
+        logger.debug(f"节点输出数据: {node_output}")
+        
+        # VHS_VideoCombine 节点的输出可能在 gifs 或 widgets 中
+        if "gifs" in node_output:
+            # 处理 GIF/视频输出（标准输出格式）
+            gifs = node_output["gifs"]
+            logger.debug(f"VHS_VideoCombine节点 {node_id} 生成了 {len(gifs)} 个GIF/视频文件")
+            
+            for gif_info in gifs:
+                try:
+                    filename = gif_info["filename"]
+                    subfolder = gif_info.get("subfolder", "")
+                    folder_type = gif_info.get("type", "output")
+                    format_type = gif_info.get("format", "image/gif")
+                    
+                    # 目前只处理图像格式
+                    if format_type and format_type.startswith('image'):
+                        logger.debug(f"收集图像/GIF: {filename}")
+                        
+                        # 生成上传路径
+                        from datetime import datetime
+                        import os
+                        file_ext = os.path.splitext(filename)[1] or '.gif'
+                        path = f"{datetime.now():%Y%m%d}/{message_id}_vhs_{len(upload_tasks)}{file_ext}"
+                        
+                        # 添加到上传任务列表
+                        upload_tasks.append({
+                            'type': 'image',
+                            'filename': filename,
+                            'subfolder': subfolder,
+                            'folder_type': folder_type,
+                            'path': path,
+                            'node_id': node_id
+                        })
+                    else:
+                        logger.debug(f"跳过非图像格式: {format_type}")
+                        
+                except Exception as e:
+                    logger.error(f"收集VHS输出失败: {gif_info}, 错误: {str(e)}")
+                    continue
+        
+        # 根据JavaScript代码，VHS_VideoCombine也可能在widgets中有输出
+        # 检查是否有widgets数组属性
+        if "widgets" in node_output and isinstance(node_output["widgets"], list):
+            widgets = node_output["widgets"]
+            logger.debug(f"VHS_VideoCombine节点 {node_id} 有 {len(widgets)} 个widgets")
+            
+            for widget in widgets:
+                try:
+                    widget_type = widget.get("type")
+                    widget_value = widget.get("value")
+                    
+                    if widget_type == "image" and widget_value:
+                        # 处理image类型的widget
+                        parsed_vals = self._parse_url_path(widget_value)
+                        if parsed_vals and parsed_vals.get("filename"):
+                            if parsed_vals.get("type") == "output":
+                                logger.debug(f"收集widget图像: {parsed_vals['filename']}")
+                                
+                                # 生成上传路径
+                                from datetime import datetime
+                                import os
+                                file_ext = os.path.splitext(parsed_vals['filename'])[1] or '.png'
+                                path = f"{datetime.now():%Y%m%d}/{message_id}_vhs_widget_{len(upload_tasks)}{file_ext}"
+                                
+                                # 添加到上传任务列表
+                                upload_tasks.append({
+                                    'type': 'image',
+                                    'filename': parsed_vals['filename'],
+                                    'subfolder': parsed_vals.get('subfolder', ''),
+                                    'folder_type': parsed_vals.get('type', 'output'),
+                                    'path': path,
+                                    'node_id': node_id
+                                })
+                    
+                    elif widget_type == "preview" and widget_value:
+                        # 处理preview类型的widget
+                        if isinstance(widget_value, dict) and "params" in widget_value:
+                            params = widget_value["params"]
+                            format_type = params.get("format", "")
+                            
+                            # 只处理图像格式，跳过视频
+                            if format_type.startswith('image'):
+                                filename = params.get("filename")
+                                if filename:
+                                    logger.debug(f"收集preview图像: {filename}")
+                                    
+                                    # 生成上传路径  
+                                    from datetime import datetime
+                                    import os
+                                    file_ext = os.path.splitext(filename)[1] or '.png'
+                                    path = f"{datetime.now():%Y%m%d}/{message_id}_vhs_preview_{len(upload_tasks)}{file_ext}"
+                                    
+                                    # 添加到上传任务列表
+                                    upload_tasks.append({
+                                        'type': 'image',
+                                        'filename': filename,
+                                        'subfolder': params.get('subfolder', ''),
+                                        'folder_type': params.get('type', 'output'),
+                                        'path': path,
+                                        'node_id': node_id
+                                    })
+                            else:
+                                logger.debug(f"跳过非图像preview格式: {format_type}")
+                                
+                except Exception as e:
+                    logger.error(f"处理widget失败: {widget}, 错误: {str(e)}")
+                    continue
+    
+    def get_result_type(self) -> str:
+        """获取结果类型"""
+        return "image"  # 目前只返回图像
+
+
 class SaveAudioResultHandler(ResultNodeHandler):
     """SaveAudio结果节点处理器"""
     
@@ -225,6 +370,7 @@ class ResultNodeService:
         self.register(SaveImageResultHandler())
         self.register(PreviewImageResultHandler())
         self.register(SaveAudioResultHandler())
+        self.register(VHS_VideoCombineResultHandler())
     
     def register(self, handler: ResultNodeHandler) -> None:
         """注册结果处理器"""
