@@ -52,11 +52,20 @@ class TaskConsumer:
         api_base_url = url.split('/api/comm/task/fetch')[0]
 
         try:
+            # 构建请求参数，添加工作流筛选
+            params = {}
+            allowed_workflows = workflow_filter.get_allowed_workflows()
+            
+            # 如果有特定的允许工作流（不是允许所有），则添加筛选参数
+            if allowed_workflows and '*' not in allowed_workflows:
+                params['workflow_names'] = allowed_workflows
+                logger.debug(f"🎯 请求任务时添加工作流筛选: {allowed_workflows}")
+            
             async with httpx.AsyncClient(
                 timeout=10.0,
                 transport=self.retry_transport
             ) as client:
-                response = await client.get(url)
+                response = await client.get(url, params=params)
                 response.raise_for_status()
 
                 response_data = response.json()

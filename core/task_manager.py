@@ -25,22 +25,27 @@ class TaskManager:
             self.tasks_storage[task["taskId"]] = task
 
     def create_task(self, workflow_name: str = None, environment: str = None,
-                    task_data: Dict[str, Any] = None, source_channel: str = None) -> Dict[str, Any]:
+                    task_data: Dict[str, Any] = None, source_channel: str = None,
+                    params: Dict[str, Any] = None) -> Dict[str, Any]:
         """创建新任务"""
         task_id = f"task_{uuid.uuid4().hex[:8]}"
 
         # 确定任务的工作流名称和目标环境
         if workflow_name:
             # 检查是否是换脸工作流
-            if workflow_name == "face_swap":
+            if workflow_name == "face_swap" or workflow_name == "faceswap":
                 # 换脸任务处理
                 environment_name = environment or "face_swap"
                 target_port = 8000  # 换脸服务端口
 
+                # 支持通过 params 或 task_data 传递参数
+                if params and "input_data" in params:
+                    task_data = params["input_data"]
+                
                 # 验证换脸任务数据
                 if not task_data:
                     raise ValueError(
-                        "Face swap tasks require task_data parameter")
+                        "Face swap tasks require task_data or params with input_data")
 
                 required_fields = ["source_url", "target_url"]
                 missing_fields = [field for field in required_fields
@@ -124,19 +129,53 @@ class TaskManager:
 
         return task
 
-    def get_next_task(self) -> Optional[Dict[str, Any]]:
-        """获取下一个任务"""
-        if not self.task_queue:
-            # 队列为空时创建新任务
-            task = self.create_task()
-            self.task_queue.append(task)
+    def get_next_task(self, workflow_names: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+        """获取下一个任务
+        
+        Args:
+            workflow_names: 可选的工作流名称列表，用于筛选任务
+        """
+        # 如果没有指定工作流筛选，使用原有逻辑
+        if not workflow_names:
+            if not self.task_queue:
+                # 队列为空时创建新任务
+                task = self.create_task()
+                self.task_queue.append(task)
+                self.tasks_storage[task["taskId"]] = task
+
+            task = self.task_queue.pop(0)
+            task["status"] = "FETCHED"
             self.tasks_storage[task["taskId"]] = task
-
-        task = self.task_queue.pop(0)
-        task["status"] = "FETCHED"
-        self.tasks_storage[task["taskId"]] = task
-
-        return task
+            return task
+        
+        # 如果指定了工作流筛选，查找匹配的任务
+        for i, task in enumerate(self.task_queue):
+            task_workflow = task.get("workflow_name") or task.get("workflow", "")
+            
+            # 检查任务的工作流是否在允许列表中
+            if task_workflow in workflow_names:
+                # 找到匹配的任务，从队列中移除
+                matched_task = self.task_queue.pop(i)
+                matched_task["status"] = "FETCHED"
+                self.tasks_storage[matched_task["taskId"]] = matched_task
+                return matched_task
+        
+        # 没有找到匹配的任务
+        # 尝试创建一个新的匹配任务（如果队列太小）
+        if len(self.task_queue) < 5:
+            # 随机选择一个允许的工作流创建新任务
+            import random
+            workflow_name = random.choice(workflow_names) if workflow_names else None
+            if workflow_name:
+                try:
+                    new_task = self.create_task(workflow_name=workflow_name)
+                    new_task["status"] = "FETCHED"
+                    self.tasks_storage[new_task["taskId"]] = new_task
+                    return new_task
+                except:
+                    pass  # 创建失败，返回None
+        
+        return None
 
     def update_task_status(self, task_id: str, status: str,
                            message: str = None, started_at: str = None,

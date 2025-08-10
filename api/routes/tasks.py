@@ -1,8 +1,8 @@
 """
 任务相关API路由
 """
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, Optional, List
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from core.task_manager import task_manager
 from config.environments import environment_manager
@@ -61,9 +61,13 @@ async def update_task(request: TaskUpdateRequest):
 
 
 @router.get("/comm/task/fetch")
-async def fetch_task_comm():
-    """获取待处理任务 - 统一通信端点"""
-    task = task_manager.get_next_task()
+async def fetch_task_comm(workflow_names: Optional[List[str]] = Query(None)):
+    """获取待处理任务 - 统一通信端点
+    
+    Args:
+        workflow_names: 可选的工作流名称列表，用于筛选特定工作流的任务
+    """
+    task = task_manager.get_next_task(workflow_names=workflow_names)
     if not task:
         return {
             "success": True,
