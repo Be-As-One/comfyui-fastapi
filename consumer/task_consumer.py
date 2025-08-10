@@ -7,6 +7,7 @@ import httpx
 from loguru import logger
 from consumer.processor_registry import processor_registry
 from httpx_retries import RetryTransport, Retry
+from utils.workflow_filter import workflow_filter
 
 
 class TaskConsumer:
@@ -111,6 +112,12 @@ class TaskConsumer:
             logger.error("Task missing taskId")
             return None
 
+        # 先检查工作流是否被允许
+        if not workflow_filter.is_workflow_allowed(workflow_name):
+            logger.info(f"⏭️  跳过任务 {task_id} - 工作流 '{workflow_name}' 不被当前机器允许")
+            # 返回 None，任务保持 PENDING 状态，让其他机器处理
+            return None
+
         logger.info(f"开始处理任务: {task_id} (工作流: {workflow_name})")
         logger.debug(f"任务详情: {task}")
 
@@ -119,7 +126,8 @@ class TaskConsumer:
             processor = self.processor_registry.get_processor(workflow_name)
 
             if not processor:
-                logger.error(f"❌ 未找到适合的处理器: {workflow_name}")
+                # 这种情况理论上不应该发生，因为已经在上面检查过了
+                logger.warning(f"⚠️  工作流 '{workflow_name}' 被过滤或未找到处理器")
                 return None
 
             processor_type = type(processor).__name__
@@ -171,11 +179,23 @@ async def start_consumer():
     """启动consumer的函数，供main.py调用"""
     logger.info("🚀 统一任务消费者启动")
     logger.info("🎯 智能分发模式：支持 ComfyUI 和 FaceFusion 任务")
-    logger.info("📋 支持的工作流类型:")
-    logger.info("  - faceswap → FaceFusion 处理器")
-    logger.info("  - comfyui_* → ComfyUI 处理器")
-    logger.info(
-        "  - basic_generation/text_to_image/image_to_image → ComfyUI 处理器")
+    
+    # 显示当前机器的工作流过滤配置
+    filter_stats = workflow_filter.get_filter_stats()
+    logger.info("🔒 工作流过滤配置:")
+    if filter_stats['allows_all']:
+        logger.info("  - 允许的工作流: 所有")
+    else:
+        logger.info(f"  - 允许的工作流: {', '.join(filter_stats['allowed_workflows'])}")
+    
+    # 显示实际支持的工作流
+    supported = processor_registry.get_supported_workflows()
+    if supported:
+        logger.info("✅ 当前机器实际支持的工作流:")
+        for workflow, processor in supported.items():
+            logger.info(f"  - {workflow} → {processor} 处理器")
+    else:
+        logger.warning("⚠️  当前机器没有支持的工作流")
 
     # 创建统一的consumer
     consumer = TaskConsumer("unified-consumer")

@@ -5,6 +5,7 @@
 """
 from typing import Dict, Any, Optional
 from loguru import logger
+from utils.workflow_filter import workflow_filter
 
 
 class ProcessorRegistry:
@@ -46,6 +47,11 @@ class ProcessorRegistry:
         # 延迟初始化
         if not self._initialized:
             self._initialize_processors()
+        
+        # 检查工作流是否被允许
+        if not workflow_filter.is_workflow_allowed(workflow_name):
+            logger.warning(f"🚫 工作流 '{workflow_name}' 不被当前机器允许处理")
+            return None
         
         # 智能分发逻辑
         processor_type = self._determine_processor_type(workflow_name)
@@ -96,7 +102,7 @@ class ProcessorRegistry:
     
     def get_supported_workflows(self) -> Dict[str, str]:
         """获取支持的工作流类型"""
-        return {
+        all_workflows = {
             "faceswap": "facefusion",
             "comfyui_*": "comfyui",
             "basic_generation": "comfyui",
@@ -104,6 +110,16 @@ class ProcessorRegistry:
             "image_to_image": "comfyui",
             "inpainting": "comfyui"
         }
+        
+        # 过滤出当前机器允许的工作流
+        allowed_workflows = {}
+        for workflow, processor in all_workflows.items():
+            # 对于通配符模式，检查一个示例
+            test_workflow = workflow.replace('*', 'example')
+            if workflow_filter.is_workflow_allowed(test_workflow):
+                allowed_workflows[workflow] = processor
+        
+        return allowed_workflows
 
 
 # 全局处理器注册表实例

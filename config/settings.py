@@ -71,3 +71,12 @@ FACE_SWAP_API_URL = os.getenv('FACE_SWAP_API_URL', 'http://localhost:8000')
 FACE_SWAP_TIMEOUT = get_env_int('FACE_SWAP_TIMEOUT', 300)  # 5 minutes
 FACE_SWAP_RETRY_COUNT = get_env_int('FACE_SWAP_RETRY_COUNT', 3)
 FACEFUSION_ROOT = os.getenv('FACEFUSION_ROOT', '/Users/hzy/Code/zhuilai/video-faceswap')
+
+# 工作流权限配置
+# 允许的工作流列表（逗号分隔，支持通配符 *）
+# 示例: "comfyui_*,basic_generation" 或 "*" 表示允许所有
+# 留空或设为 "*" 表示允许所有工作流
+ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', '*')
+
+# 是否记录被过滤的任务（用于调试）
+LOG_FILTERED_TASKS = get_env_bool('LOG_FILTERED_TASKS', True)
