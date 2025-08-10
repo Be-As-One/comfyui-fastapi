@@ -232,10 +232,12 @@ async def get_task_stats():
 async def get_supported_workflows():
     """获取支持的工作流类型"""
     from consumer.processor_registry import processor_registry
+    from utils.workflow_filter import workflow_filter
 
     return {
         "success": True,
-        "supported_workflows": processor_registry.get_supported_workflows(),
+        "allowed_workflows": workflow_filter.get_allowed_workflows(),
+        "filter_stats": workflow_filter.get_filter_stats(),
         "available_processors": processor_registry.list_processors()
     }
 

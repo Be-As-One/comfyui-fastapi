@@ -188,14 +188,6 @@ async def start_consumer():
     else:
         logger.info(f"  - 允许的工作流: {', '.join(filter_stats['allowed_workflows'])}")
     
-    # 显示实际支持的工作流
-    supported = processor_registry.get_supported_workflows()
-    if supported:
-        logger.info("✅ 当前机器实际支持的工作流:")
-        for workflow, processor in supported.items():
-            logger.info(f"  - {workflow} → {processor} 处理器")
-    else:
-        logger.warning("⚠️  当前机器没有支持的工作流")
 
     # 创建统一的consumer
     consumer = TaskConsumer("unified-consumer")

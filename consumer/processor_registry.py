@@ -100,26 +100,6 @@ class ProcessorRegistry:
             for processor_type, processor in self.processors.items()
         }
     
-    def get_supported_workflows(self) -> Dict[str, str]:
-        """获取支持的工作流类型"""
-        all_workflows = {
-            "faceswap": "facefusion",
-            "comfyui_*": "comfyui",
-            "basic_generation": "comfyui",
-            "text_to_image": "comfyui",
-            "image_to_image": "comfyui",
-            "inpainting": "comfyui"
-        }
-        
-        # 过滤出当前机器允许的工作流
-        allowed_workflows = {}
-        for workflow, processor in all_workflows.items():
-            # 对于通配符模式，检查一个示例
-            test_workflow = workflow.replace('*', 'example')
-            if workflow_filter.is_workflow_allowed(test_workflow):
-                allowed_workflows[workflow] = processor
-        
-        return allowed_workflows
 
 
 # 全局处理器注册表实例
