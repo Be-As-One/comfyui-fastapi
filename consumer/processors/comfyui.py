@@ -99,7 +99,7 @@ class ComfyUIProcessor:
                 f"🎯 开始执行ComfyUI工作流: {task_id} (工作流: {task.get('workflow_name', '默认')})")
             t_gen_start = time.time()
             results = self._execute_comfyui_task(
-                task, wf_json, task_id, task_started_at)
+                task, wf_json, task_id, task_started_at, source_channel)
             execution_time = time.time() - t_gen_start
 
             # 检查是否为服务不可用
@@ -189,7 +189,7 @@ class ComfyUIProcessor:
 
             return None
 
-    def _execute_comfyui_task(self, task, wf_json, task_id, task_started_at):
+    def _execute_comfyui_task(self, task, wf_json, task_id, task_started_at, source_channel=None):
         """执行ComfyUI任务"""
         workflow_name = task.get("workflowName", "默认")
         environment = task.get("environment", "comm")
