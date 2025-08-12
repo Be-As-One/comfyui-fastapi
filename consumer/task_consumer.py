@@ -55,12 +55,12 @@ class TaskConsumer:
             # 构建请求参数，添加工作流筛选
             params = {}
             allowed_workflows = workflow_filter.get_allowed_workflows()
-            
+
             # 如果有特定的允许工作流（不是允许所有），则添加筛选参数
             if allowed_workflows and '*' not in allowed_workflows:
-                params['workflow_names'] = allowed_workflows
+                params['workflowNames'] = allowed_workflows
                 logger.debug(f"🎯 请求任务时添加工作流筛选: {allowed_workflows}")
-            
+
             async with httpx.AsyncClient(
                 timeout=10.0,
                 transport=self.retry_transport
@@ -97,7 +97,8 @@ class TaskConsumer:
                     logger.debug(f"Got task: {task_id} from {api_base_url}")
                     # 为任务添加源渠道信息
                     data["source_channel"] = api_base_url
-                    logger.debug(f"Task {task_id} marked with source_channel: {api_base_url}")
+                    logger.debug(
+                        f"Task {task_id} marked with source_channel: {api_base_url}")
                     return data
                 else:
                     logger.debug(f"No task available from {api_base_url}")
@@ -188,15 +189,15 @@ async def start_consumer():
     """启动consumer的函数，供main.py调用"""
     logger.info("🚀 统一任务消费者启动")
     logger.info("🎯 智能分发模式：支持 ComfyUI 和 FaceFusion 任务")
-    
+
     # 显示当前机器的工作流过滤配置
     filter_stats = workflow_filter.get_filter_stats()
     logger.info("🔒 工作流过滤配置:")
     if filter_stats['allows_all']:
         logger.info("  - 允许的工作流: 所有")
     else:
-        logger.info(f"  - 允许的工作流: {', '.join(filter_stats['allowed_workflows'])}")
-    
+        logger.info(
+            f"  - 允许的工作流: {', '.join(filter_stats['allowed_workflows'])}")
 
     # 创建统一的consumer
     consumer = TaskConsumer("unified-consumer")
