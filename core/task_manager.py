@@ -215,11 +215,41 @@ class TaskManager:
 
 def get_task_stats() -> Dict[str, Any]:
     """获取任务统计信息"""
-    return {
-        "tasks_in_queue": len(task_manager.task_queue),
-        "total_tasks": len(task_manager.tasks_storage)
-    }
+    # 支持两种任务管理器
+    if hasattr(task_manager, 'get_task_stats'):
+        # Redis任务管理器
+        return task_manager.get_task_stats()
+    else:
+        # 内存任务管理器
+        return {
+            "tasks_in_queue": len(task_manager.task_queue),
+            "total_tasks": len(task_manager.tasks_storage)
+        }
 
 
-# 全局任务管理器实例
-task_manager = TaskManager()
+# 全局任务管理器实例 - 根据配置选择
+def _create_task_manager():
+    """创建任务管理器实例"""
+    from config.settings import TASK_MANAGER_TYPE
+    from loguru import logger
+
+    if TASK_MANAGER_TYPE == 'redis':
+        try:
+            from core.redis_task_manager import RedisTaskManager
+            from config.redis_config import get_redis_client
+
+            redis_client = get_redis_client()
+            # 测试连接
+            redis_client.ping()
+            logger.info("✅ 使用Redis任务管理器")
+            return RedisTaskManager(redis_client)
+        except Exception as e:
+            logger.error(f"❌ Redis连接失败，回退到内存任务管理器: {e}")
+            logger.warning("⚠️  使用内存任务管理器（开发模式）")
+            return TaskManager()
+    else:
+        logger.info("✅ 使用内存任务管理器（开发模式）")
+        return TaskManager()
+
+
+task_manager = _create_task_manager()
