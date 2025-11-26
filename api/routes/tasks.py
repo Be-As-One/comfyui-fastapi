@@ -206,7 +206,8 @@ async def create_task_with_workflow(workflow_name: str):
 @router.get("/stats")
 async def get_task_stats():
     """获取任务统计信息"""
-    tasks = task_manager.get_all_tasks()
+    all_tasks_data = task_manager.get_all_tasks()
+    tasks = all_tasks_data.get("tasks", []) if isinstance(all_tasks_data, dict) else all_tasks_data
 
     stats = {
         "total": len(tasks),
