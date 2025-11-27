@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: comfyui-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - comfyui-network
+    restart: unless-stopped
+
+  # ComfyUI FastAPI 服务示例（需要根据实际情况调整）
+  # comfyui-api:
+  #   build: .
+  #   container_name: comfyui-api
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - TASK_MANAGER_TYPE=redis
+  #     - APP_ENV=production
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - comfyui-network
+  #   restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  comfyui-network:
+    driver: bridge

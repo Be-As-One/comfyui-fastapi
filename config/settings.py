@@ -80,3 +80,13 @@ ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', '*')
 
 # 是否记录被过滤的任务（用于调试）
 LOG_FILTERED_TASKS = get_env_bool('LOG_FILTERED_TASKS', True)
+
+# Redis配置
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = get_env_int('REDIS_PORT', 6379)
+REDIS_DB = get_env_int('REDIS_DB', 0)
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+REDIS_MAX_CONNECTIONS = get_env_int('REDIS_MAX_CONNECTIONS', 50)
+
+# 任务管理器类型: 'memory' 或 'redis'
+TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'memory')
