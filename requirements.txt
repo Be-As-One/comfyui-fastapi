@@ -9,6 +9,10 @@ httpx-retries
 websocket-client
 pydantic
 
+# Redis dependencies
+redis>=5.0.0
+hiredis  # Optional, for better performance
+
 # Storage dependencies (optional)
 google-cloud-storage  # For Google Cloud Storage
 boto3                 # For Cloudflare R2 and AWS S3
