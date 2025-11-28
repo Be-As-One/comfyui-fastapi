@@ -104,8 +104,14 @@ class ComfyUIProcessor:
 
             # 检查是否为服务不可用
             if results == "SERVICE_UNAVAILABLE":
-                logger.info(f"📋 任务 {task_id} 因服务不可用被跳过，保持 PENDING 状态")
-                return None  # 返回 None，不更新任务状态
+                logger.info(f"📋 任务 {task_id} 因服务不可用被跳过，将状态更新回 PENDING")
+                # 将任务状态更新回 PENDING，让它重新进入队列
+                self._update_task_status(
+                    task_id, "PENDING",
+                    message="ComfyUI 服务暂时不可用，任务等待重试",
+                    source_channel=source_channel
+                )
+                return "SERVICE_UNAVAILABLE"  # 返回特殊值，而不是 None
 
             # 更新任务状态为PROCESSING（只有在服务可用时才更新）
             logger.debug(f"更新任务状态为PROCESSING: {task_id}")

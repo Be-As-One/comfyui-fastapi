@@ -147,7 +147,12 @@ class TaskConsumer:
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, processor.process, task)
 
-            if result:
+            # 处理不同的返回结果
+            if result == "SERVICE_UNAVAILABLE":
+                # 服务不可用，任务已被放回队列，不是错误
+                logger.info(f"⏳ 任务 {task_id} 因服务不可用被放回队列，等待重试 (处理器: {processor_type})")
+                return result
+            elif result:
                 logger.info(f"✅ 任务 {task_id} 完成 (处理器: {processor_type})")
                 logger.debug(f"任务结果: {result}")
             else:
@@ -166,13 +171,25 @@ class TaskConsumer:
     async def start(self):
         """启动消费者循环"""
         self.running = True
+        self._service_unavailable_count = 0  # 跟踪连续服务不可用次数
         logger.info(f"🚀 Consumer {self.name} 启动")
 
         while self.running:
             try:
                 task = await self.fetch_task()
                 if task:
-                    await self.process_task(task)
+                    result = await self.process_task(task)
+
+                    # 如果服务不可用，使用指数退避延迟
+                    if result == "SERVICE_UNAVAILABLE":
+                        self._service_unavailable_count += 1
+                        # 指数退避：2, 4, 8, 16, 最大30秒
+                        delay = min(2 ** self._service_unavailable_count, 30)
+                        logger.info(f"⏳ 服务不可用，等待 {delay} 秒后重试 (连续 {self._service_unavailable_count} 次)")
+                        await asyncio.sleep(delay)
+                    else:
+                        # 服务正常，重置计数器
+                        self._service_unavailable_count = 0
                 else:
                     await asyncio.sleep(1)
             except Exception as e:

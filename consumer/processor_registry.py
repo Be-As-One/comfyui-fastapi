@@ -82,7 +82,8 @@ class ProcessorRegistry:
             return "comfyui"
         
         # 其他未知类型，默认使用 ComfyUI 处理器
-        logger.warning(f"⚠️ 未知工作流类型 '{workflow_name}'，默认使用 ComfyUI 处理器")
+        # 这是正常情况，ComfyUI 可以处理各种自定义工作流
+        logger.debug(f"工作流 '{workflow_name}' 使用 ComfyUI 处理器")
         return "comfyui"
     
     def register_processor(self, processor_type: str, processor: Any):
