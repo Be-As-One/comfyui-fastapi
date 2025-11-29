@@ -63,22 +63,20 @@ def init_google_cloud_auth():
 
 # 初始化存储管理器
 def init_storage():
-    """初始化存储管理器"""
+    """初始化存储管理器（现在是自动的，这里只做预热）"""
     try:
-        # 先初始化 Google Cloud 认证
+        # 先初始化 Google Cloud 认证（如果使用 GCS）
         init_google_cloud_auth()
-        
-        from core.storage import StorageManager, set_storage_manager
-        logger.info("🔧 初始化存储管理器...")
 
-        # 手动创建存储管理器实例
-        storage_manager = StorageManager()
-        storage_manager.initialize()
+        # 触发存储管理器自动配置（懒加载）
+        from core.storage import get_storage_manager
+        storage_manager = get_storage_manager()
 
-        # 设置为全局实例
-        set_storage_manager(storage_manager)
+        if storage_manager.is_initialized():
+            logger.info(f"✅ 存储管理器已就绪: {list(storage_manager.providers.keys())}")
+        else:
+            logger.warning("⚠️ 存储管理器未配置任何提供商")
 
-        logger.info("✅ 存储管理器初始化完成")
         return storage_manager
     except Exception as e:
         logger.warning(f"⚠️ 存储管理器初始化失败: {e}")
