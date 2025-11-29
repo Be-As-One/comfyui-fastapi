@@ -2,13 +2,21 @@
 应用配置设置
 """
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
+# 获取项目根目录（config 目录的父目录）
+_PROJECT_ROOT = Path(__file__).parent.parent
+
 # 加载 .env 文件（优先 .env.prod，然后 .env）
-if os.path.exists('.env.prod'):
-    load_dotenv('.env.prod')
-elif os.path.exists('.env'):
-    load_dotenv('.env')
+# 使用绝对路径确保在任何工作目录下都能找到
+_env_prod = _PROJECT_ROOT / '.env.prod'
+_env_file = _PROJECT_ROOT / '.env'
+
+if _env_prod.exists():
+    load_dotenv(_env_prod)
+elif _env_file.exists():
+    load_dotenv(_env_file)
 
 # 服务器配置（优先环境变量）
 DEFAULT_HOST = os.getenv('HOST', '127.0.0.1')
