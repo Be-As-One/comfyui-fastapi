@@ -205,11 +205,11 @@ class ComfyUIProcessor:
             comfyui = self._get_comfyui_client(task)
 
             # 早期检查：验证 ComfyUI 服务是否可用
-            logger.debug(f"🔍 检查 ComfyUI 服务可用性: {comfyui.server_address}")
+            logger.debug(f"检查 ComfyUI 服务可用性: {comfyui.server_address}")
             if not comfyui.check_server_health():
                 logger.warning(
-                    f"⚠️  ComfyUI 服务暂时不可用: {comfyui.server_address}")
-                logger.info(f"📋 跳过任务 {task_id}，等待服务恢复")
+                    f"ComfyUI 服务器无响应: {comfyui.server_address} (无法连接到 /system_stats)")
+                logger.info(f"跳过任务 {task_id}，等待服务器启动")
                 return "SERVICE_UNAVAILABLE"  # 返回特殊值表示服务不可用
 
             logger.debug(f"✅ ComfyUI 服务可用，继续处理任务")
@@ -252,9 +252,9 @@ class ComfyUIProcessor:
             logger.error(f"导入模块失败: {str(e)}")
             raise
         except ConnectionRefusedError as e:
-            # 连接被拒绝，说明服务不可用，跳过任务
-            logger.warning(f"⚠️  ComfyUI 连接被拒绝: {str(e)}")
-            logger.info(f"📋 跳过任务 {task_id}，等待服务恢复")
+            # 连接被拒绝，说明服务未启动
+            logger.warning(f"ComfyUI 连接被拒绝: {str(e)}")
+            logger.info(f"跳过任务 {task_id}，等待服务器启动")
             return "SERVICE_UNAVAILABLE"
         except Exception as e:
             logger.error(f"执行ComfyUI任务时发生异常: {str(e)}")
@@ -264,8 +264,8 @@ class ComfyUIProcessor:
             # 检查是否为连接相关错误
             error_msg = str(e).lower()
             if any(keyword in error_msg for keyword in ["connection", "websocket", "refused", "timeout", "not available"]):
-                logger.warning(f"⚠️  检测到连接错误: {str(e)}")
-                logger.info(f"📋 跳过任务 {task_id}，等待服务恢复")
+                logger.warning(f"检测到网络连接错误: {str(e)}")
+                logger.info(f"跳过任务 {task_id}，等待连接恢复")
                 # 清理客户端缓存，下次重新创建
                 workflow_name = task.get("workflow_name")
                 cache_key = workflow_name if workflow_name else "default"
