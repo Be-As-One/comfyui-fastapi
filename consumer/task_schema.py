@@ -94,10 +94,12 @@ def normalize_queue_task(raw_task: Dict[str, Any]) -> Dict[str, Any]:
     # 任务 ID
     task_id = raw_task.get("taskId") or raw_task.get("task_id") or raw_task.get("id")
 
-    # 工作流名称
+    # 工作流名称 (支持多种命名格式)
     workflow = (
+        raw_task.get("workflowName") or  # API 格式 (camelCase)
         raw_task.get("workflow") or
         raw_task.get("workflow_name") or
+        raw_task.get("params", {}).get("workflowName") or
         raw_task.get("params", {}).get("workflow_name") or
         "default"
     )
@@ -120,6 +122,7 @@ def normalize_queue_task(raw_task: Dict[str, Any]) -> Dict[str, Any]:
         "userId": raw_task.get("userId") or raw_task.get("user_id"),
         "priority": raw_task.get("priority", "normal"),
         "workflow": workflow,
+        "workflowName": workflow,  # 同时提供 camelCase 格式，兼容 comfyui.py
         "params": params,
         "callbackUrl": callback_url,
         "createdAt": raw_task.get("createdAt") or raw_task.get("created_at") or datetime.utcnow().isoformat(),
