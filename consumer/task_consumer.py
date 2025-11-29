@@ -38,9 +38,9 @@ class TaskConsumer:
             logger.info(f"API URLs: {self.api_urls}")
         elif self.consumer_mode == 'redis_queue':
             if self.queue_consumer and self.queue_consumer.is_available():
-                logger.info("✅ Redis 队列模式已就绪")
+                logger.info("Redis 队列模式已就绪")
             else:
-                logger.warning("⚠️ Redis 队列不可用，将回退到 HTTP 模式")
+                logger.warning("Redis 队列不可用，将回退到 HTTP 模式")
                 self.consumer_mode = 'http'
         logger.info(
             f"支持的处理器: {list(self.processor_registry.list_processors().keys())}")
@@ -101,7 +101,7 @@ class TaskConsumer:
             # 如果有特定的允许工作流（不是允许所有），则添加筛选参数
             if allowed_workflows and '*' not in allowed_workflows:
                 params['workflowNames'] = allowed_workflows
-                logger.debug(f"🎯 请求任务时添加工作流筛选: {allowed_workflows}")
+                logger.debug(f"请求任务时添加工作流筛选: {allowed_workflows}")
 
             async with httpx.AsyncClient(
                 timeout=10.0,
@@ -168,7 +168,7 @@ class TaskConsumer:
 
         # 先检查工作流是否被允许
         if not workflow_filter.is_workflow_allowed(workflow_name):
-            logger.info(f"⏭️  跳过任务 {task_id} - 工作流 '{workflow_name}' 不被当前机器允许")
+            logger.info(f"跳过任务 {task_id} - 工作流 '{workflow_name}' 不被当前机器允许")
             # 返回 None，任务保持 PENDING 状态，让其他机器处理
             return None
 
@@ -182,7 +182,7 @@ class TaskConsumer:
         )
 
         if is_test_task:
-            logger.info(f"🧪 检测到测试任务 {task_id}，直接标记完成")
+            logger.info(f"[TEST] 检测到测试任务 {task_id}，直接标记完成")
             # 构造测试结果
             test_result = {
                 "status": "COMPLETED",
@@ -196,7 +196,7 @@ class TaskConsumer:
                     task_id=task_id,
                     result=test_result
                 )
-            logger.info(f"✅ 测试任务 {task_id} 已标记完成")
+            logger.info(f"[TEST] 测试任务 {task_id} 已标记完成")
             return test_result
 
         # Redis 队列模式下标记任务为处理中
@@ -209,18 +209,18 @@ class TaskConsumer:
 
             if not processor:
                 # 这种情况理论上不应该发生，因为已经在上面检查过了
-                logger.warning(f"⚠️  工作流 '{workflow_name}' 被过滤或未找到处理器")
+                logger.warning(f"工作流 '{workflow_name}' 被过滤或未找到处理器")
                 return None
 
             processor_type = type(processor).__name__
-            logger.info(f"🎯 使用处理器: {processor_type}")
+            logger.info(f"使用处理器: {processor_type}")
 
             # 使用处理器处理任务 - 在线程池中运行同步代码
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, processor.process, task)
 
             if result:
-                logger.info(f"✅ 任务 {task_id} 完成 (处理器: {processor_type})")
+                logger.info(f"任务 {task_id} 完成 (处理器: {processor_type})")
                 logger.debug(f"任务结果: {result}")
 
                 # Redis 队列模式下写入结果到 Redis
@@ -231,7 +231,7 @@ class TaskConsumer:
                     )
             else:
                 logger.error(
-                    f"❌ 任务 {task_id} 处理失败 - 返回结果为空 (处理器: {processor_type})")
+                    f"任务 {task_id} 处理失败 - 返回结果为空 (处理器: {processor_type})")
                 logger.error(f"任务详情: {task}")
 
                 # Redis 队列模式下写入失败结果到 Redis
@@ -243,7 +243,7 @@ class TaskConsumer:
 
             return result
         except Exception as e:
-            logger.error(f"❌ 处理任务 {task_id} 时发生异常: {str(e)}")
+            logger.error(f"处理任务 {task_id} 时发生异常: {str(e)}")
             logger.error(f"异常类型: {type(e).__name__}")
             logger.error(f"任务详情: {task}")
             logger.debug(f"异常详情:", exc_info=True)
@@ -260,7 +260,7 @@ class TaskConsumer:
     async def start(self):
         """启动消费者循环"""
         self.running = True
-        logger.info(f"🚀 Consumer {self.name} 启动")
+        logger.info(f"Consumer {self.name} 启动")
 
         while self.running:
             try:
@@ -276,17 +276,17 @@ class TaskConsumer:
     def stop(self):
         """停止消费者"""
         self.running = False
-        logger.info(f"🛑 Consumer {self.name} 停止")
+        logger.info(f"Consumer {self.name} 停止")
 
 
 async def start_consumer():
     """启动consumer的函数，供main.py调用"""
-    logger.info("🚀 统一任务消费者启动")
-    logger.info("🎯 智能分发模式：支持 ComfyUI 和 FaceFusion 任务")
+    logger.info("统一任务消费者启动")
+    logger.info("智能分发模式：支持 ComfyUI 和 FaceFusion 任务")
 
     # 显示当前机器的工作流过滤配置
     filter_stats = workflow_filter.get_filter_stats()
-    logger.info("🔒 工作流过滤配置:")
+    logger.info("工作流过滤配置:")
     if filter_stats['allows_all']:
         logger.info("  - 允许的工作流: 所有")
     else:
@@ -299,7 +299,7 @@ async def start_consumer():
     try:
         await consumer.start()
     except KeyboardInterrupt:
-        logger.info("🛑 收到中断信号，系统正在关闭")
+        logger.info("收到中断信号，系统正在关闭")
     finally:
         consumer.stop()
-        logger.info("✅ 统一消费者已停止")
+        logger.info("统一消费者已停止")
