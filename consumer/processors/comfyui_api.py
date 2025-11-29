@@ -312,12 +312,19 @@ class ComfyUI:
         outputs = prompt_history.get("outputs", {})
         logger.debug(f"找到 {len(outputs)} 个输出节点")
 
+        # 详细记录每个输出节点的信息，帮助诊断问题
+        for node_id, node_output in outputs.items():
+            node_data = prompt.get(node_id, {})
+            class_type = node_data.get("class_type", "unknown")
+            logger.debug(f"输出节点 {node_id}: class_type={class_type}, output_keys={list(node_output.keys())}")
+
         # 6. 使用结果节点注册表收集所有结果
         output_urls = []
-        
+
         # 使用结果节点服务收集所有结果
         from services.node_service import node_service
         upload_tasks = node_service.collect_workflow_results(prompt, outputs, message_id)
+        logger.debug(f"收集到 {len(upload_tasks)} 个上传任务")
         
         # 处理收集到的上传任务，获取实际的文件数据
         for task in upload_tasks:
