@@ -11,11 +11,10 @@ from datetime import datetime
 from websocket import WebSocketTimeoutException
 from loguru import logger
 from core.storage import get_storage_manager
-from config.settings import cdn_url
 from config.environments import environment_manager
 
 class ComfyUI:
-    def __init__(self, server_address="127.0.0.1:3001", cdn_url="https://cdn.undress.ai", workflow_name=None):
+    def __init__(self, server_address="127.0.0.1:3001", workflow_name=None):
         # 如果提供了工作流名称，使用环境管理器获取对应的端口
         if workflow_name:
             port = environment_manager.get_port_by_workflow(workflow_name)
@@ -378,14 +377,8 @@ class ComfyUI:
                     try:
                         url = future.result()
                         if url:
-                            # 根据存储提供商类型决定返回的URL格式
-                            storage_manager = get_storage_manager()
-                            if 'cf_images' in storage_manager.providers and storage_manager.default_provider == 'cf_images':
-                                # 对于Cloudflare Images，直接使用返回的URL
-                                output_urls.append(url)
-                            else:
-                                # 对于其他存储，使用CDN URL
-                                output_urls.append(f"{cdn_url}/{task['path']}")
+                            # 存储提供商已返回完整的 URL，直接使用
+                            output_urls.append(url)
                     except Exception as e:
                         logger.error(f"处理上传结果时出错: {str(e)}")
 
