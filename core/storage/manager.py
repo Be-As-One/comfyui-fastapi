@@ -126,6 +126,7 @@ class StorageManager:
     def _configure_r2(self, storage_provider: str):
         """配置Cloudflare R2提供商"""
         # 直接使用 settings.py 中的配置（已包含环境变量处理）
+        logger.debug(f"R2配置检查: provider={storage_provider}, bucket={r2_bucket_name}, account={r2_account_id}, access_key={bool(r2_access_key)}, secret_key={bool(r2_secret_key)}")
         if storage_provider == 'r2' and all([r2_bucket_name, r2_account_id, r2_access_key, r2_secret_key]):
             try:
                 from .providers.cloudflare_r2 import CloudflareR2Provider

@@ -217,6 +217,11 @@ class ComfyUI:
                     self.ws_connected = False
                     raise
 
+                # 跳过二进制消息（如图像预览数据）
+                if isinstance(msg, bytes):
+                    logger.debug(f"跳过二进制消息，大小: {len(msg)} bytes")
+                    continue
+
                 if isinstance(msg, str):
                     try:
                         data = json.loads(msg)
