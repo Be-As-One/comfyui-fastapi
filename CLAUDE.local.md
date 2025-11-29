@@ -1,8 +1,8 @@
 # ComfyUI FastAPI + Face Swap Integration
 
-**架构**: FastAPI + ComfyUI + Face Swap 微服务  
-**存储**: 多云支持 (GCS, R2, CF Images)  
-**状态**: Face swap 集成完成，统一数据格式  
+**架构**: FastAPI + ComfyUI + Face Swap 微服务
+**存储**: Cloudflare R2（与 aaaa 项目一致，支持 GCS/CF Images 备用）
+**状态**: Redis 队列集成完成，R2 存储配置完成  
 
 ## 核心端点
 ```
@@ -76,8 +76,13 @@ COMFYUI_URL = getenv("COMFYUI_URL", "http://localhost:8188")
 FACE_SWAP_API_URL = getenv("FACE_SWAP_API_URL", "http://localhost:8000")
 FACE_SWAP_TIMEOUT = float(getenv("FACE_SWAP_TIMEOUT", "120.0"))
 
-# 存储配置
-STORAGE_PROVIDER = getenv("STORAGE_PROVIDER", "gcs")  # gcs|r2|cf_images
+# 存储配置（默认 R2，与 aaaa 项目一致）
+STORAGE_PROVIDER = getenv("STORAGE_PROVIDER", "r2")  # r2|gcs|cf_images
+R2_ACCOUNT_ID = getenv("R2_ACCOUNT_ID")
+R2_ACCESS_KEY_ID = getenv("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = getenv("R2_SECRET_ACCESS_KEY")
+R2_BUCKET = getenv("R2_BUCKET")
+R2_PUBLIC_URL = getenv("R2_PUBLIC_URL", "https://static.z-image.vip")
 ```
 
 ## 任务处理流程
@@ -180,11 +185,16 @@ def validate_safe_url(url: str) -> bool:
 
 ## 部署配置
 ```bash
-# 生产环境
+# 生产环境（使用 R2 存储，与 aaaa 一致）
 export APP_ENV=production
 export COMFYUI_URL=http://comfyui:8188
 export FACE_SWAP_API_URL=http://faceswap:8000
-export STORAGE_PROVIDER=cf_images
+export STORAGE_PROVIDER=r2
+export R2_ACCOUNT_ID=xxx
+export R2_ACCESS_KEY_ID=xxx
+export R2_SECRET_ACCESS_KEY=xxx
+export R2_BUCKET=xxx
+export R2_PUBLIC_URL=https://static.z-image.vip
 ```
 
 ## 关键实现细节
