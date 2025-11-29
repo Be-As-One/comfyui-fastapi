@@ -24,7 +24,10 @@ class ComfyUIProcessor:
 
     def _get_comfyui_client(self, task: dict) -> ComfyUI:
         """根据任务获取对应的ComfyUI客户端"""
-        workflow_name = task.get("workflow_name")
+        # 支持两种命名方式：workflowName (API格式) 和 workflow_name (Python格式)
+        workflow_name = task.get("workflowName") or task.get("workflow_name")
+
+        logger.debug(f"获取ComfyUI客户端: workflowName={task.get('workflowName')}, workflow_name={task.get('workflow_name')}, 最终使用: {workflow_name}")
 
         if workflow_name:
             # 使用工作流特定的客户端
@@ -267,7 +270,7 @@ class ComfyUIProcessor:
                 logger.warning(f"检测到网络连接错误: {str(e)}")
                 logger.info(f"跳过任务 {task_id}，等待连接恢复")
                 # 清理客户端缓存，下次重新创建
-                workflow_name = task.get("workflow_name")
+                workflow_name = task.get("workflowName") or task.get("workflow_name")
                 cache_key = workflow_name if workflow_name else "default"
                 if cache_key in self.client_cache:
                     self.client_cache.pop(cache_key)

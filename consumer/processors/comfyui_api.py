@@ -15,7 +15,7 @@ from config.settings import cdn_url
 from config.environments import environment_manager
 
 class ComfyUI:
-    def __init__(self, server_address="127.0.0.1:8188", cdn_url="https://cdn.undress.ai", workflow_name=None):
+    def __init__(self, server_address="127.0.0.1:3001", cdn_url="https://cdn.undress.ai", workflow_name=None):
         # 如果提供了工作流名称，使用环境管理器获取对应的端口
         if workflow_name:
             port = environment_manager.get_port_by_workflow(workflow_name)
