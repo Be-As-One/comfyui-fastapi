@@ -350,14 +350,17 @@ class ComfyUI:
         valid_upload_tasks = [task for task in upload_tasks if 'file_data' in task]
         if valid_upload_tasks:
             logger.debug(f"开始并发上传 {len(valid_upload_tasks)} 个文件")
-            
+
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            
+
+            # 在主线程获取 storage_manager，避免线程池中访问全局变量问题
+            storage_mgr = get_storage_manager()
+
             def upload_single_file(task):
                 """上传单个文件的函数"""
                 try:
                     logger.debug(f"上传文件到: {task['path']}")
-                    url = get_storage_manager().upload_binary(task['file_data'], task['path'])
+                    url = storage_mgr.upload_binary(task['file_data'], task['path'])
                     logger.debug(f"文件上传成功: {task['filename']} -> {url}")
                     return url
                 except Exception as e:

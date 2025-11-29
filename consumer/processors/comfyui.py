@@ -342,11 +342,17 @@ class ComfyUIProcessor:
         # 1. source_channel 是有效的 HTTP URL -> 使用它
         # 2. source_channel 是 "redis_queue" -> 使用 TASK_CALLBACK_URL
         # 3. 否则使用默认的 task_api_url
+        logger.debug(f"回调URL确定: source_channel={source_channel}, TASK_CALLBACK_URL={TASK_CALLBACK_URL}, task_api_url={task_api_url}")
+
         if source_channel and source_channel.startswith(("http://", "https://")):
             update_url = source_channel
-        elif source_channel == "redis_queue" and TASK_CALLBACK_URL:
-            update_url = TASK_CALLBACK_URL
-            logger.debug(f"Redis队列任务，使用 TASK_CALLBACK_URL: {update_url}")
+        elif source_channel == "redis_queue":
+            if TASK_CALLBACK_URL:
+                update_url = TASK_CALLBACK_URL
+                logger.debug(f"Redis队列任务，使用 TASK_CALLBACK_URL: {update_url}")
+            else:
+                logger.warning(f"Redis队列任务但 TASK_CALLBACK_URL 未配置，跳过回调: task_id={task_id}")
+                return False
         else:
             update_url = task_api_url
 
