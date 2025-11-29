@@ -330,27 +330,29 @@ class ComfyUIProcessor:
     def _update_task_status(self, task_id, status, message=None,
                             started_at=None, finished_at=None, output_data=None, source_channel=None):
         """更新任务状态"""
-        from config.settings import task_api_url
+        from config.settings import task_api_url, TASK_CALLBACK_URL
 
         # 详细调试信息
-        logger.debug(f"🔄 _update_task_status 被调用:")
-        logger.debug(f"  - task_id: {task_id}")
-        logger.debug(f"  - status: {status}")
-        logger.debug(f"  - message: {message}")
-        logger.debug(f"  - started_at: {started_at}")
-        logger.debug(f"  - finished_at: {finished_at}")
-        logger.debug(f"  - output_data: {output_data}")
-        logger.debug(f"  - output_data类型: {type(output_data)}")
-        logger.debug(f"  - source_channel: {source_channel}")
-        if output_data:
-            logger.debug(
-                f"  - output_data详细内容: {json.dumps(output_data, indent=2, ensure_ascii=False)}")
+        logger.debug(f"_update_task_status: task_id={task_id}, status={status}")
 
-        # 使用源渠道URL或回退到默认URL
-        update_url = source_channel or task_api_url
+        # 确定回调 URL：
+        # 1. source_channel 是有效的 HTTP URL -> 使用它
+        # 2. source_channel 是 "redis_queue" -> 使用 TASK_CALLBACK_URL
+        # 3. 否则使用默认的 task_api_url
+        if source_channel and source_channel.startswith(("http://", "https://")):
+            update_url = source_channel
+        elif source_channel == "redis_queue" and TASK_CALLBACK_URL:
+            update_url = TASK_CALLBACK_URL
+            logger.debug(f"Redis队列任务，使用 TASK_CALLBACK_URL: {update_url}")
+        else:
+            update_url = task_api_url
+
+        if not update_url:
+            logger.warning(f"无可用的回调URL，跳过状态更新: task_id={task_id}")
+            return False
+
         url = f"{update_url}/api/comm/task/update"
-        logger.debug(f"  - 目标URL: {url}")
-        logger.debug(f"  - 使用源渠道: {source_channel is not None}")
+        logger.debug(f"回调URL: {url}")
 
         payload = {
             "taskId": task_id,
@@ -360,39 +362,20 @@ class ComfyUIProcessor:
 
         if message:
             payload["task_message"] = message
-            logger.debug(f"  - 添加message到payload: {message}")
         if started_at:
-            formatted_started_at = started_at.strftime(
+            payload["started_at"] = started_at.strftime(
                 "%Y-%m-%d %H:%M:%S") if isinstance(started_at, datetime) else started_at
-            payload["started_at"] = formatted_started_at
-            logger.debug(f"  - 添加started_at到payload: {formatted_started_at}")
         if finished_at:
-            formatted_finished_at = finished_at.strftime(
+            payload["finished_at"] = finished_at.strftime(
                 "%Y-%m-%d %H:%M:%S") if isinstance(finished_at, datetime) else finished_at
-            payload["finished_at"] = formatted_finished_at
-            logger.debug(f"  - 添加finished_at到payload: {formatted_finished_at}")
         if output_data:
             payload["output_data"] = output_data
-            logger.debug(f"  - 添加output_data到payload: {output_data}")
-
-        logger.debug(
-            f"  - 最终payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
 
         try:
             t_start = time.time()
-            logger.debug(f"📤 发送POST请求到: {url}")
 
             with httpx.Client(transport=self.retry_transport, timeout=30.0) as client:
                 response = client.post(url, json=payload)
-                logger.debug(f"📥 收到响应状态码: {response.status_code}")
-                logger.debug(f"📥 响应头: {dict(response.headers)}")
-
-                try:
-                    response_text = response.text
-                    logger.debug(f"📥 响应内容: {response_text}")
-                except Exception as text_error:
-                    logger.debug(f"📥 无法读取响应内容: {text_error}")
-
                 response.raise_for_status()
 
                 # 处理新的 API 响应格式
@@ -402,28 +385,15 @@ class ComfyUIProcessor:
                 success = response_data.get("success", code == 200)
 
                 if not success:
-                    logger.error(
-                        f"❌ API返回错误 for task {task_id}: code={code}, message={api_message}")
+                    logger.error(f"回调失败 task={task_id}: code={code}, message={api_message}")
                     return False
 
-                logger.info(
-                    f"✅ Task update sent successfully for task {task_id}, 耗时{time.time() - t_start:.2f}秒")
-                logger.debug(f"✅ 成功发送任务状态更新: {status}")
+                logger.debug(f"回调成功 task={task_id} status={status} 耗时{time.time() - t_start:.2f}s")
                 return True
 
         except httpx.HTTPError as e:
-            logger.error(f"❌ HTTP请求失败 for task {task_id}: {str(e)}")
-            logger.error(f"❌ 请求URL: {url}")
-            logger.error(f"❌ 请求payload: {payload}")
-            if hasattr(e, 'response') and e.response is not None:
-                logger.error(f"❌ 响应状态码: {e.response.status_code}")
-                try:
-                    logger.error(f"❌ 响应内容: {e.response.text}")
-                except:
-                    logger.error(f"❌ 无法读取错误响应内容")
+            logger.error(f"回调HTTP错误 task={task_id}: {str(e)}, url={url}")
             return False
         except Exception as e:
-            logger.error(f"❌ 发送任务状态更新时发生未知异常 for task {task_id}: {str(e)}")
-            logger.error(f"❌ 异常类型: {type(e).__name__}")
-            logger.debug(f"❌ 异常详情:", exc_info=True)
+            logger.error(f"回调异常 task={task_id}: {type(e).__name__}: {str(e)}")
             return False
