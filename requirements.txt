@@ -8,10 +8,12 @@ httpx
 httpx-retries
 websocket-client
 pydantic
+python-dotenv  # 自动加载 .env 文件
 
 # Redis dependencies
 redis>=5.0.0
 hiredis  # Optional, for better performance
+upstash-redis  # For Upstash Redis REST API
 
 # Storage dependencies (optional)
 google-cloud-storage  # For Google Cloud Storage

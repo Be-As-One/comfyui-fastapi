@@ -1,5 +1,6 @@
 """
 任务消费者
+支持双模式：HTTP 轮询 / Redis 队列
 """
 import asyncio
 from utils import get_task_api_urls
@@ -8,10 +9,14 @@ from loguru import logger
 from consumer.processor_registry import processor_registry
 from httpx_retries import RetryTransport, Retry
 from utils.workflow_filter import workflow_filter
+from config.settings import CONSUMER_MODE
+from consumer.queue_consumer import get_queue_consumer
+from consumer.task_schema import normalize_queue_task
+from consumer.result_callback import get_result_callback
 
 
 class TaskConsumer:
-    """任务消费者"""
+    """任务消费者 - 支持 HTTP 轮询和 Redis 队列两种模式"""
 
     def __init__(self, name: str):
         self.name = name
@@ -19,16 +24,53 @@ class TaskConsumer:
         self.running = False
         self.processor_registry = processor_registry
         self.source_stats = {}
+        self.consumer_mode = CONSUMER_MODE  # 'http' 或 'redis_queue'
+        self.queue_consumer = get_queue_consumer() if self.consumer_mode == 'redis_queue' else None
+        self.result_callback = get_result_callback()
+
         # 使用 httpx-retries 包的配置
         retry = Retry(total=3, backoff_factor=0.5)
         self.retry_transport = RetryTransport(retry=retry)
+
         logger.info(f"统一任务消费者 {self.name} 初始化完成")
-        logger.info(f"API URLs: {self.api_urls}")
+        logger.info(f"消费模式: {self.consumer_mode}")
+        if self.consumer_mode == 'http':
+            logger.info(f"API URLs: {self.api_urls}")
+        elif self.consumer_mode == 'redis_queue':
+            if self.queue_consumer and self.queue_consumer.is_available():
+                logger.info("✅ Redis 队列模式已就绪")
+            else:
+                logger.warning("⚠️ Redis 队列不可用，将回退到 HTTP 模式")
+                self.consumer_mode = 'http'
         logger.info(
             f"支持的处理器: {list(self.processor_registry.list_processors().keys())}")
 
     async def fetch_task(self):
-        """从多个任务源轮询获取一个待处理任务"""
+        """从任务源获取一个待处理任务"""
+        # Redis 队列模式
+        if self.consumer_mode == 'redis_queue' and self.queue_consumer:
+            return await self._fetch_from_redis_queue()
+
+        # HTTP 轮询模式（默认）
+        return await self._fetch_from_http()
+
+    async def _fetch_from_redis_queue(self):
+        """从 Redis 三级优先队列获取任务"""
+        try:
+            raw_task = await self.queue_consumer.fetch_task()
+            if raw_task:
+                # 标准化任务格式
+                task = normalize_queue_task(raw_task)
+                task["source_channel"] = "redis_queue"
+                logger.info(f"从 Redis 队列获取任务: {task.get('taskId')}")
+                return task
+            return None
+        except Exception as e:
+            logger.error(f"从 Redis 队列获取任务失败: {e}")
+            return None
+
+    async def _fetch_from_http(self):
+        """从 HTTP API 轮询获取任务"""
         # 轮询所有配置的API源
         for api_url in self.api_urls:
             url = f"{api_url}/api/comm/task/fetch"
@@ -116,7 +158,9 @@ class TaskConsumer:
     async def process_task(self, task):
         """处理单个任务"""
         task_id = task.get("taskId")
-        workflow_name = task.get("workflow_name", "")
+        # 兼容两种字段名: workflow_name 和 workflow
+        workflow_name = task.get("workflow_name") or task.get("workflow", "")
+        callback_url = task.get("callbackUrl") or task.get("callback_url")
 
         if not task_id:
             logger.error("Task missing taskId")
@@ -130,6 +174,34 @@ class TaskConsumer:
 
         logger.info(f"开始处理任务: {task_id} (工作流: {workflow_name})")
         logger.debug(f"任务详情: {task}")
+
+        # 检测测试任务：taskId 以 test_task_ 开头 或 workflowName 是 test_workflow
+        is_test_task = (
+            task_id.startswith("test_task_") or
+            workflow_name == "test_workflow"
+        )
+
+        if is_test_task:
+            logger.info(f"🧪 检测到测试任务 {task_id}，直接标记完成")
+            # 构造测试结果
+            test_result = {
+                "status": "COMPLETED",
+                "taskId": task_id,
+                "message": "测试任务已完成（跳过实际处理）",
+                "is_test": True
+            }
+            # 发送成功回调
+            if self.consumer_mode == 'redis_queue':
+                await self.result_callback.send_success(
+                    task_id=task_id,
+                    result=test_result
+                )
+            logger.info(f"✅ 测试任务 {task_id} 已标记完成")
+            return test_result
+
+        # Redis 队列模式下标记任务为处理中
+        if self.consumer_mode == 'redis_queue':
+            await self.result_callback.send_processing(task_id)
 
         try:
             # 根据工作流名称获取对应的处理器
@@ -150,10 +222,24 @@ class TaskConsumer:
             if result:
                 logger.info(f"✅ 任务 {task_id} 完成 (处理器: {processor_type})")
                 logger.debug(f"任务结果: {result}")
+
+                # Redis 队列模式下写入结果到 Redis
+                if self.consumer_mode == 'redis_queue':
+                    await self.result_callback.send_success(
+                        task_id=task_id,
+                        result=result
+                    )
             else:
                 logger.error(
                     f"❌ 任务 {task_id} 处理失败 - 返回结果为空 (处理器: {processor_type})")
                 logger.error(f"任务详情: {task}")
+
+                # Redis 队列模式下写入失败结果到 Redis
+                if self.consumer_mode == 'redis_queue':
+                    await self.result_callback.send_failure(
+                        task_id=task_id,
+                        error="处理器返回空结果"
+                    )
 
             return result
         except Exception as e:
@@ -161,6 +247,14 @@ class TaskConsumer:
             logger.error(f"异常类型: {type(e).__name__}")
             logger.error(f"任务详情: {task}")
             logger.debug(f"异常详情:", exc_info=True)
+
+            # Redis 队列模式下写入异常结果到 Redis
+            if self.consumer_mode == 'redis_queue':
+                await self.result_callback.send_failure(
+                    task_id=task_id,
+                    error=str(e)
+                )
+
             return None
 
     async def start(self):

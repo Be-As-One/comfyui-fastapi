@@ -2,6 +2,13 @@
 应用配置设置
 """
 import os
+from dotenv import load_dotenv
+
+# 加载 .env 文件（优先 .env.prod，然后 .env）
+if os.path.exists('.env.prod'):
+    load_dotenv('.env.prod')
+elif os.path.exists('.env'):
+    load_dotenv('.env')
 
 # 服务器配置（优先环境变量）
 DEFAULT_HOST = os.getenv('HOST', '127.0.0.1')
@@ -37,12 +44,12 @@ bucket_name = os.getenv('GCS_BUCKET_NAME', 'cdn-test-ai-undress-ai')
 bucket_region = os.getenv('GCS_BUCKET_REGION', 'us-east-1')
 cdn_url = os.getenv('CDN_URL', 'https://cdn.ai-undress.ai')
 
-# Cloudflare R2 配置
-r2_bucket_name = os.getenv('R2_BUCKET_NAME', '')
+# Cloudflare R2 配置（与 aaaa 项目保持一致）
+r2_bucket_name = os.getenv('R2_BUCKET', '')
 r2_account_id = os.getenv('R2_ACCOUNT_ID', '')
-r2_access_key = os.getenv('R2_ACCESS_KEY', '')
-r2_secret_key = os.getenv('R2_SECRET_KEY', '')
-r2_public_domain = os.getenv('R2_PUBLIC_DOMAIN', '')
+r2_access_key = os.getenv('R2_ACCESS_KEY_ID', '')
+r2_secret_key = os.getenv('R2_SECRET_ACCESS_KEY', '')
+r2_public_domain = os.getenv('R2_PUBLIC_URL', 'https://static.z-image.vip')
 
 # Cloudflare Images 配置
 cf_images_account_id = os.getenv('CF_IMAGES_ACCOUNT_ID', '')
@@ -88,5 +95,16 @@ REDIS_DB = get_env_int('REDIS_DB', 0)
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 REDIS_MAX_CONNECTIONS = get_env_int('REDIS_MAX_CONNECTIONS', 50)
 
+# Upstash Redis REST API 配置（远程Redis）
+UPSTASH_REDIS_REST_URL = os.getenv('UPSTASH_REDIS_REST_URL', '')
+UPSTASH_REDIS_REST_TOKEN = os.getenv('UPSTASH_REDIS_REST_TOKEN', '')
+
 # 任务管理器类型: 'memory' 或 'redis'
 TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'memory')
+
+# 消费者模式: 'redis_queue' (Redis三级优先队列) 或 'http' (HTTP轮询)
+CONSUMER_MODE = os.getenv('CONSUMER_MODE', 'redis_queue')
+
+# 任务结果回调配置
+TASK_CALLBACK_URL = os.getenv('TASK_CALLBACK_URL', '')  # 任务完成后的回调地址
+TASK_CALLBACK_TIMEOUT = get_env_int('TASK_CALLBACK_TIMEOUT', 30)  # 回调超时时间（秒）
