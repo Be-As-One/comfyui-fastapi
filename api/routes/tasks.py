@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from core.task_manager import task_manager
-from config.environments import environment_manager
+from config.settings import COMFYUI_URL
 
 router = APIRouter()
 
@@ -174,19 +174,10 @@ async def clear_tasks():
     return {"message": "All tasks cleared"}
 
 
-@router.get("/environments")
-async def get_environments():
-    """获取所有环境信息"""
-    return environment_manager.get_environment_info()
-
-
-@router.get("/workflows")
-async def get_workflows():
-    """获取所有可用的工作流"""
-    return {
-        "workflows": environment_manager.get_all_workflows(),
-        "workflow_mapping": environment_manager.workflow_to_env
-    }
+@router.get("/comfyui/config")
+async def get_comfyui_config():
+    """获取 ComfyUI 配置信息"""
+    return {"comfyui_url": COMFYUI_URL}
 
 
 @router.post("/tasks/create/{workflow_name}")

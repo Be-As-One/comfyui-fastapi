@@ -11,18 +11,19 @@ from datetime import datetime
 from websocket import WebSocketTimeoutException
 from loguru import logger
 from core.storage import get_storage_manager
-from config.environments import environment_manager
+from config.settings import COMFYUI_URL
 
 class ComfyUI:
-    def __init__(self, server_address="127.0.0.1:3001", workflow_name=None):
-        # 如果提供了工作流名称，使用环境管理器获取对应的端口
-        if workflow_name:
-            port = environment_manager.get_port_by_workflow(workflow_name)
-            self.server_address = f"127.0.0.1:{port}"
-            logger.info(f"🎯 根据工作流 '{workflow_name}' 设置ComfyUI地址: {self.server_address}")
-        else:
+    def __init__(self, server_address=None, workflow_name=None):
+        # 获取 ComfyUI 地址
+        if server_address:
             self.server_address = server_address
-            
+        else:
+            # 使用配置的 ComfyUI 地址
+            self.server_address = COMFYUI_URL.replace("http://", "").replace("https://", "")
+            if workflow_name:
+                logger.info(f"🎯 工作流 '{workflow_name}' -> ComfyUI: {self.server_address}")
+
         self.workflow_name = workflow_name
         self.client_id = str(uuid.uuid4())
         self.ws = None

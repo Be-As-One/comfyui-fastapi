@@ -20,7 +20,7 @@ api/server.py - FastAPI 服务器
 core/task_manager.py - 任务管理
 consumer/task_consumer.py - 异步任务处理
 services/face_swap_service.py - Face Swap 服务
-config/settings.py - 环境配置
+config/settings.py - 统一配置（唯一真相源）
 core/storage/manager.py - 存储管理
 ```
 

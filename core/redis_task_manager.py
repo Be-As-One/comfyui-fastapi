@@ -10,7 +10,6 @@ from typing import Dict, Any, Optional, List
 from redis import Redis
 from loguru import logger
 from config.workflows import WORKFLOW_TEMPLATES
-from config.environments import environment_manager
 
 
 class RedisTaskManager:
@@ -72,21 +71,14 @@ class RedisTaskManager:
                 # 保存到Redis
                 self._save_task_to_redis(task)
                 return task
-            else:
-                # 验证ComfyUI工作流是否存在
-                available_workflows = environment_manager.get_all_workflows()
-                if workflow_name not in available_workflows:
-                    raise ValueError(
-                        f"未知的工作流: {workflow_name}. 可用工作流: {available_workflows}")
-        else:
-            # 如果没有指定工作流，随机选择一个可用的工作流
-            available_workflows = environment_manager.get_all_workflows()
-            workflow_name = random.choice(
-                available_workflows) if available_workflows else "basic_generation"
 
         # ComfyUI任务处理
+        if not workflow_name:
+            # 如果没有指定工作流，使用默认值
+            workflow_name = "basic_generation"
+
         # 使用默认工作流模板
-        workflow = WORKFLOW_TEMPLATES["default"].copy()
+        workflow = WORKFLOW_TEMPLATES.get("default", {}).copy()
 
         # 随机修改参数
         if "3" in workflow and workflow["3"]["class_type"] == "KSampler":
@@ -102,19 +94,14 @@ class RedisTaskManager:
             ]
             workflow["6"]["inputs"]["text"] = random.choice(prompts)
 
-        # 获取工作流对应的环境信息
-        env_config = environment_manager.get_environment_by_workflow(
-            workflow_name)
-        environment_name = environment or (
-            env_config.name if env_config else "comm")
-        target_port = env_config.port if env_config else 3001
+        # 环境名称简化
+        environment_name = environment or "comfyui"
 
         task = {
             "taskId": task_id,
-            "workflow": workflow_name,  # 使用一致的键名
+            "workflow": workflow_name,
             "workflow_name": workflow_name,  # 保持向后兼容
             "environment": environment_name,
-            "target_port": target_port,
             "params": {
                 "input_data": {
                     "wf_json": workflow
