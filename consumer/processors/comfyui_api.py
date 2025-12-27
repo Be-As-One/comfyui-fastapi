@@ -322,6 +322,7 @@ class ComfyUI:
             node_data = prompt.get(node_id, {})
             class_type = node_data.get("class_type", "unknown")
             logger.debug(f"输出节点 {node_id}: class_type={class_type}, output_keys={list(node_output.keys())}")
+            logger.debug(f"输出节点 {node_id} 完整数据: {node_output}")
 
         # 6. 使用结果节点注册表收集所有结果
         output_urls = []
