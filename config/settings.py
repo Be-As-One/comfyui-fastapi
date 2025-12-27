@@ -94,7 +94,7 @@ FACEFUSION_ROOT = os.getenv('FACEFUSION_ROOT', '/Users/hzy/Code/zhuilai/video-fa
 # 允许的工作流列表（逗号分隔，支持通配符 *）
 # 示例: "comfyui_*,basic_generation" 或 "*" 表示允许所有
 # 留空或设为 "*" 表示允许所有工作流
-ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', '*')
+ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', 'comfyui_wan')
 
 # 是否记录被过滤的任务（用于调试）
 LOG_FILTERED_TASKS = get_env_bool('LOG_FILTERED_TASKS', True)
@@ -107,8 +107,8 @@ REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 REDIS_MAX_CONNECTIONS = get_env_int('REDIS_MAX_CONNECTIONS', 50)
 
 # Upstash Redis REST API 配置（远程Redis）
-UPSTASH_REDIS_REST_URL = os.getenv('UPSTASH_REDIS_REST_URL', '')
-UPSTASH_REDIS_REST_TOKEN = os.getenv('UPSTASH_REDIS_REST_TOKEN', '')
+UPSTASH_REDIS_REST_URL="https://capital-macaque-38589.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="AZa9AAIncDIxYzEyNmNlOTcwZWM0MmYxYWZiYTQzMmJiMDc1MTYzOHAyMzg1ODk"
 
 # 任务管理器类型: 'memory' 或 'redis'
 TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'memory')

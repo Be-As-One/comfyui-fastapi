@@ -61,6 +61,15 @@ class TaskConsumer:
             if raw_task:
                 # 标准化任务格式
                 task = normalize_queue_task(raw_task)
+
+                # 检查工作流是否被允许（在拉取后立即检查）
+                workflow_name = task.get('workflow') or task.get('workflowName', 'default')
+                if not workflow_filter.is_workflow_allowed(workflow_name):
+                    logger.warning(f"🚫 跳过不支持的工作流: {task.get('taskId')} ({workflow_name})")
+                    # 不支持的任务，放回队列或标记失败
+                    # 这里选择不返回任务，让它继续拉取下一个
+                    return None
+
                 task["source_channel"] = "redis_queue"
                 logger.info(f"从 Redis 队列获取任务: {task.get('taskId')}")
                 return task
