@@ -111,7 +111,7 @@ UPSTASH_REDIS_REST_URL="https://capital-macaque-38589.upstash.io"
 UPSTASH_REDIS_REST_TOKEN="AZa9AAIncDIxYzEyNmNlOTcwZWM0MmYxYWZiYTQzMmJiMDc1MTYzOHAyMzg1ODk"
 
 # 任务管理器类型: 'memory' 或 'redis'
-TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'memory')
+TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'redis')
 
 # 消费者模式: 'redis_queue' (Redis三级优先队列) 或 'http' (HTTP轮询)
 CONSUMER_MODE = os.getenv('CONSUMER_MODE', 'redis_queue')
