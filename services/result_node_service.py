@@ -297,9 +297,83 @@ class VHS_VideoCombineResultHandler(ResultNodeHandler):
         return "video"  # VHS_VideoCombine 主要用于视频合成
 
 
+class SaveVideoResultHandler(ResultNodeHandler):
+    """SaveVideo结果节点处理器"""
+
+    def can_handle(self, node_data: Dict[str, Any]) -> bool:
+        """判断是否为SaveVideo节点"""
+        return node_data.get("class_type") == "SaveVideo"
+
+    def collect_results(self, node_id: str, node_data: Dict[str, Any], node_output: Dict[str, Any],
+                       message_id: str, upload_tasks: List[Dict[str, Any]]) -> None:
+        """收集SaveVideo节点的输出视频"""
+        logger.debug(f"处理SaveVideo节点 {node_id} 的输出")
+        logger.debug(f"SaveVideo节点输出数据: {node_output}")
+
+        # SaveVideo节点通常会输出 "animated" 字段（包含视频列表）
+        # 有时也可能在 "videos", "gifs" 或 "images" 字段中
+        video_fields = ["animated", "videos", "gifs"]
+
+        for field in video_fields:
+            if field in node_output:
+                videos = node_output[field]
+
+                # 确保是列表
+                if not isinstance(videos, list):
+                    logger.warning(f"SaveVideo节点 {node_id} 的 '{field}' 字段不是列表: {type(videos)}")
+                    continue
+
+                logger.debug(f"SaveVideo节点 {node_id} 在字段 '{field}' 中生成了 {len(videos)} 个视频文件")
+
+                for video_info in videos:
+                    try:
+                        # 检查是否是字典
+                        if not isinstance(video_info, dict):
+                            logger.warning(f"视频信息不是字典: {video_info}")
+                            continue
+
+                        filename = video_info.get("filename")
+                        if not filename:
+                            logger.warning(f"视频信息缺少filename字段: {video_info}")
+                            continue
+
+                        subfolder = video_info.get("subfolder", "")
+                        folder_type = video_info.get("type", "output")
+
+                        logger.debug(f"收集视频: {filename} (subfolder={subfolder}, type={folder_type})")
+
+                        # 生成上传路径
+                        from datetime import datetime
+                        import os
+                        file_ext = os.path.splitext(filename)[1] or '.mp4'
+                        path = f"{datetime.now():%Y%m%d}/{message_id}_video_{len(upload_tasks)}{file_ext}"
+
+                        # 添加到上传任务列表
+                        upload_tasks.append({
+                            'type': 'video',
+                            'filename': filename,
+                            'subfolder': subfolder,
+                            'folder_type': folder_type,
+                            'path': path,
+                            'node_id': node_id
+                        })
+
+                    except Exception as e:
+                        logger.error(f"收集视频失败: {video_info}, 错误: {str(e)}")
+                        continue
+
+                return  # 找到一个字段就返回
+
+        logger.warning(f"SaveVideo节点 {node_id} 没有找到视频输出字段，可用字段: {list(node_output.keys())}")
+
+    def get_result_type(self) -> str:
+        """获取结果类型"""
+        return "video"
+
+
 class SaveAudioResultHandler(ResultNodeHandler):
     """SaveAudio结果节点处理器"""
-    
+
     def can_handle(self, node_data: Dict[str, Any]) -> bool:
         """判断是否为SaveAudio节点"""
         return node_data.get("class_type") == "SaveAudio"
@@ -391,6 +465,7 @@ class ResultNodeService:
         """注册默认结果处理器"""
         self.register(SaveImageResultHandler())
         self.register(PreviewImageResultHandler())
+        self.register(SaveVideoResultHandler())
         self.register(SaveAudioResultHandler())
         self.register(VHS_VideoCombineResultHandler())
     
