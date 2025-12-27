@@ -47,6 +47,7 @@ class TaskConsumer:
 
     async def fetch_task(self):
         """从任务源获取一个待处理任务"""
+        logger.debug(f'{self.consumer_mode}:fetch_task')
         # Redis 队列模式
         if self.consumer_mode == 'redis_queue' and self.queue_consumer:
             return await self._fetch_from_redis_queue()

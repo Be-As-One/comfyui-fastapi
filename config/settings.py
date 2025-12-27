@@ -10,12 +10,13 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 
 # 加载 .env 文件（优先 .env.prod，然后 .env）
 # 使用绝对路径确保在任何工作目录下都能找到
+APP_ENV ="test"
 _env_prod = _PROJECT_ROOT / '.env.prod'
-_env_file = _PROJECT_ROOT / '.env'
+_env_file = _PROJECT_ROOT / '.env.test'
 
-if _env_prod.exists():
+if APP_ENV == 'prod':
     load_dotenv(_env_prod)
-elif _env_file.exists():
+elif APP_ENV == 'test':
     load_dotenv(_env_file)
 
 # 服务器配置（优先环境变量）
@@ -34,33 +35,33 @@ def get_env_int(key: str, default: int) -> int:
         return default
 
 # 应用环境
-APP_ENV = os.getenv('APP_ENV', 'local')
 
 # 根据环境硬编码配置
-if APP_ENV == 'local':
-    # 本地开发环境
-    TASK_API_URL = 'https://exactly-comic-lioness.ngrok-free.app'
-    COMFYUI_URL = 'http://127.0.0.1:3001'
-elif APP_ENV == 'test':
-    # 测试环境
-    TASK_API_URL = 'https://test-api.example.com/api'
-    COMFYUI_URL = 'http://127.0.0.1:3001'
-elif APP_ENV == 'prod':
-    # 生产环境
-    TASK_API_URL = 'https://api.example.com/api'
-    COMFYUI_URL = 'http://127.0.0.1:3001'
-else:
-    # 默认回退
-    TASK_API_URL = f'http://{DEFAULT_HOST}:{DEFAULT_PORT}/api'
-    COMFYUI_URL = 'http://127.0.0.1:3001'
+# if APP_ENV == 'local':
+#     # 本地开发环境
+#     TASK_API_URL = 'https://exactly-comic-lioness.ngrok-free.app'
+#     COMFYUI_URL = 'http://127.0.0.1:3001'
+# elif APP_ENV == 'test':
+#     # 测试环境
+#     TASK_API_URL = 'https://test-api.example.com/api'
+#     COMFYUI_URL = 'http://127.0.0.1:3001'
+# elif APP_ENV == 'prod':
+#     # 生产环境
+#     TASK_API_URL = 'https://api.example.com/api'
+#     COMFYUI_URL = 'http://127.0.0.1:3001'
+# else:
+#     # 默认回退
+#     TASK_API_URL = f'http://{DEFAULT_HOST}:{DEFAULT_PORT}/api'
+#     COMFYUI_URL = 'http://127.0.0.1:3001'
 
 # 向后兼容（废弃，请使用大写变量）
-task_api_url = TASK_API_URL
+task_api_url = os.getenv('TASK_API_URL', '')
 api_key = os.getenv('API_KEY', '')
 consumer_timeout = get_env_int('CONSUMER_TIMEOUT', 30)
 
+COMFYUI_URL = os.getenv('COMFYUI_URL', 'http://127.0.0.1:3001')
 # 向后兼容（废弃，请使用 COMFYUI_URL）
-comfyui_url = COMFYUI_URL
+comfyui_url =COMFYUI_URL
 
 # 存储配置
 storage_provider = os.getenv('STORAGE_PROVIDER', 'gcs')  # 'gcs' 或 'r2'
@@ -87,7 +88,7 @@ API_SECRET_KEY = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 API_SOURCE = "service"
 
 # 日志配置
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'DEBUG')
+LOG_LEVEL ="DEBUG"
 LOG_FILE = os.getenv('LOG_FILE', 'logs/app.log')
 
 # ComfyUI 就绪检查配置
@@ -109,7 +110,7 @@ FACEFUSION_ROOT = os.getenv('FACEFUSION_ROOT', '/Users/hzy/Code/zhuilai/video-fa
 # 允许的工作流列表（逗号分隔，支持通配符 *）
 # 示例: "comfyui_*,basic_generation" 或 "*" 表示允许所有
 # 留空或设为 "*" 表示允许所有工作流
-ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', 'comfyui_wan')
+ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', '*')
 
 # 是否记录被过滤的任务（用于调试）
 LOG_FILTERED_TASKS = get_env_bool('LOG_FILTERED_TASKS', True)
@@ -126,7 +127,7 @@ UPSTASH_REDIS_REST_URL="https://capital-macaque-38589.upstash.io"
 UPSTASH_REDIS_REST_TOKEN="AZa9AAIncDIxYzEyNmNlOTcwZWM0MmYxYWZiYTQzMmJiMDc1MTYzOHAyMzg1ODk"
 
 # 任务管理器类型: 'memory' 或 'redis'
-TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'redis')
+TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'memory')
 
 # 消费者模式: 'redis_queue' (Redis三级优先队列) 或 'http' (HTTP轮询)
 CONSUMER_MODE = os.getenv('CONSUMER_MODE', 'redis_queue')
