@@ -34,15 +34,30 @@ def get_env_int(key: str, default: int) -> int:
         return default
 
 # 应用环境
-APP_ENV = os.getenv('APP_ENV', 'dev')
+APP_ENV = os.getenv('APP_ENV', 'local')
 
-# 任务API配置
-task_api_url = os.getenv('TASK_API_URL', f'http://{DEFAULT_HOST}:{DEFAULT_PORT}/api')
+# 根据环境硬编码配置
+if APP_ENV == 'local':
+    # 本地开发环境
+    TASK_API_URL = 'https://exactly-comic-lioness.ngrok-free.app'
+    COMFYUI_URL = 'http://127.0.0.1:3001'
+elif APP_ENV == 'test':
+    # 测试环境
+    TASK_API_URL = 'https://test-api.example.com/api'
+    COMFYUI_URL = 'http://127.0.0.1:3001'
+elif APP_ENV == 'prod':
+    # 生产环境
+    TASK_API_URL = 'https://api.example.com/api'
+    COMFYUI_URL = 'http://127.0.0.1:3001'
+else:
+    # 默认回退
+    TASK_API_URL = f'http://{DEFAULT_HOST}:{DEFAULT_PORT}/api'
+    COMFYUI_URL = 'http://127.0.0.1:3001'
+
+# 向后兼容（废弃，请使用大写变量）
+task_api_url = TASK_API_URL
 api_key = os.getenv('API_KEY', '')
 consumer_timeout = get_env_int('CONSUMER_TIMEOUT', 30)
-
-# ComfyUI配置
-COMFYUI_URL = os.getenv('COMFYUI_URL', 'http://127.0.0.1:3002')
 
 # 向后兼容（废弃，请使用 COMFYUI_URL）
 comfyui_url = COMFYUI_URL
