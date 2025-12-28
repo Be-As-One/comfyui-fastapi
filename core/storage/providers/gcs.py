@@ -66,15 +66,24 @@ class GCSProvider(StorageProvider):
             logger.error(f"Failed to upload file to GCS: {e}")
             raise
 
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
+    def upload_binary(self, binary_data: bytes, destination_path: str, content_type: str = None) -> str:
         """上传二进制数据到GCS - 支持大数据分块上传"""
         data_size = len(binary_data)
         logger.info(f"开始上传二进制数据到GCS: {destination_path}")
         logger.info(f"数据大小: {data_size / 1024 / 1024:.2f}MB")
 
         try:
+            # 根据文件扩展名推断 Content-Type
+            if not content_type:
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(destination_path)
+                if not content_type:
+                    content_type = 'application/octet-stream'
+
+            logger.debug(f"Content-Type: {content_type}")
+
             blob = self.bucket.blob(destination_path)
-            
+
             # 对于大数据，设置分块大小
             if data_size > 100 * 1024 * 1024:  # > 100MB
                 # 根据数据大小动态设置分块大小
@@ -84,11 +93,11 @@ class GCSProvider(StorageProvider):
                 else:
                     blob.chunk_size = 64 * 1024 * 1024  # 64MB chunks
                     logger.info(f"中等数据检测: 使用 64MB 分块上传")
-            
+
             # 使用 BytesIO 实现流式上传，避免多次复制数据
             with BytesIO(binary_data) as data_stream:
-                blob.upload_from_file(data_stream, size=data_size, rewind=True)
-            
+                blob.upload_from_file(data_stream, size=data_size, content_type=content_type, rewind=True)
+
             logger.debug(f"数据上传完成")
 
             url = self._get_cdn_url(destination_path)

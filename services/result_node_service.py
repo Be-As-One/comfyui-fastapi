@@ -310,9 +310,10 @@ class SaveVideoResultHandler(ResultNodeHandler):
         logger.debug(f"处理SaveVideo节点 {node_id} 的输出")
         logger.debug(f"SaveVideo节点输出数据: {node_output}")
 
-        # SaveVideo节点通常会输出 "animated" 字段（包含视频列表）
-        # 有时也可能在 "videos", "gifs" 或 "images" 字段中
-        video_fields = ["animated", "videos", "gifs"]
+        # SaveVideo节点的视频文件信息存储在 "images" 字段中（尽管是视频文件）
+        # "animated" 字段只是布尔值标记，不包含文件信息
+        # 也可能在 "videos" 或 "gifs" 字段中
+        video_fields = ["images", "videos", "gifs"]
 
         for field in video_fields:
             if field in node_output:
@@ -323,18 +324,18 @@ class SaveVideoResultHandler(ResultNodeHandler):
                     logger.warning(f"SaveVideo节点 {node_id} 的 '{field}' 字段不是列表: {type(videos)}")
                     continue
 
-                logger.debug(f"SaveVideo节点 {node_id} 在字段 '{field}' 中生成了 {len(videos)} 个视频文件")
+                logger.debug(f"SaveVideo节点 {node_id} 在字段 '{field}' 中找到 {len(videos)} 个条目")
 
                 for video_info in videos:
                     try:
                         # 检查是否是字典
                         if not isinstance(video_info, dict):
-                            logger.warning(f"视频信息不是字典: {video_info}")
+                            logger.debug(f"跳过非字典条目: {video_info}")
                             continue
 
                         filename = video_info.get("filename")
                         if not filename:
-                            logger.warning(f"视频信息缺少filename字段: {video_info}")
+                            logger.debug(f"跳过缺少filename的条目: {video_info}")
                             continue
 
                         subfolder = video_info.get("subfolder", "")
@@ -362,9 +363,11 @@ class SaveVideoResultHandler(ResultNodeHandler):
                         logger.error(f"收集视频失败: {video_info}, 错误: {str(e)}")
                         continue
 
-                return  # 找到一个字段就返回
+                # 只要找到有效的文件就返回
+                if upload_tasks:
+                    return
 
-        logger.warning(f"SaveVideo节点 {node_id} 没有找到视频输出字段，可用字段: {list(node_output.keys())}")
+        logger.warning(f"SaveVideo节点 {node_id} 没有找到视频输出，可用字段: {list(node_output.keys())}")
 
     def get_result_type(self) -> str:
         """获取结果类型"""

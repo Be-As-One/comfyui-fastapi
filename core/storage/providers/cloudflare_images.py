@@ -39,12 +39,12 @@ class CloudflareImagesProvider(StorageProvider):
             logger.error(f"Failed to upload file to Cloudflare Images: {e}")
             raise
 
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
+    def upload_binary(self, binary_data: bytes, destination_path: str, content_type: str = None) -> str:
         """上传二进制数据到Cloudflare Images"""
         logger.info(f"开始上传二进制数据到Cloudflare Images: {destination_path}")
         logger.debug(f"数据大小: {len(binary_data)} bytes")
 
-        return self._upload_with_file_data(binary_data, destination_path)
+        return self._upload_with_file_data(binary_data, destination_path, content_type=content_type)
 
     def upload_base64(self, base64_data: str, destination_path: str) -> str:
         """上传base64数据到Cloudflare Images"""
@@ -56,13 +56,20 @@ class CloudflareImagesProvider(StorageProvider):
             logger.error(f"Failed to upload base64 data to Cloudflare Images: {e}")
             raise
 
-    def _upload_with_file_data(self, file_data: bytes, destination_path: str, source_file_name: str = None) -> str:
+    def _upload_with_file_data(self, file_data: bytes, destination_path: str, source_file_name: str = None, content_type: str = None) -> str:
         """内部方法：使用文件数据上传到Cloudflare Images"""
         try:
             filename = os.path.splitext(os.path.basename(destination_path))[0]
 
+            # 根据文件扩展名推断 Content-Type
+            if not content_type:
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(destination_path)
+                if not content_type:
+                    content_type = 'image/jpeg'
+
             files = {
-                'file': ('image.jpg', file_data, 'image/jpeg')
+                'file': ('image.jpg', file_data, content_type)
             }
             data = {
                 'id': filename,

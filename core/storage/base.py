@@ -13,7 +13,7 @@ class StorageProvider(ABC):
         pass
 
     @abstractmethod
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
+    def upload_binary(self, binary_data: bytes, destination_path: str, content_type: str = None) -> str:
         """上传二进制数据，返回URL"""
         pass
 

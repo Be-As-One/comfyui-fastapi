@@ -38,16 +38,26 @@ class CloudflareR2Provider(StorageProvider):
             logger.error(f"Failed to upload file to R2: {e}")
             raise
 
-    def upload_binary(self, binary_data: bytes, destination_path: str) -> str:
+    def upload_binary(self, binary_data: bytes, destination_path: str, content_type: str = None) -> str:
         """上传二进制数据到Cloudflare R2"""
         logger.info(f"开始上传二进制数据到R2: {destination_path}")
         logger.debug(f"数据大小: {len(binary_data)} bytes")
 
         try:
+            # 根据文件扩展名推断 Content-Type
+            if not content_type:
+                import mimetypes
+                content_type, _ = mimetypes.guess_type(destination_path)
+                if not content_type:
+                    content_type = 'application/octet-stream'
+
+            logger.debug(f"Content-Type: {content_type}")
+
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
                 Key=destination_path,
-                Body=binary_data
+                Body=binary_data,
+                ContentType=content_type
             )
             logger.debug(f"R2上传完成")
 
