@@ -14,7 +14,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==================== 配置 ====================
 API_KEY = "f0bc823242554d8f42ccc475b5c18ebb"
-SAVE_DIR = "/workspace/shared-models/loras"  # 下载目录
+# 下载目录：优先使用环境变量，本地默认 ./loras，服务器用 /workspace/shared-models/loras
+SAVE_DIR = os.getenv("LORA_SAVE_DIR",
+    "/workspace/shared-models/loras" if os.path.exists("/workspace") else "./loras"
+)
 CSV_FILE = "pose-ai.csv"  # CSV 文件路径
 MAX_WORKERS = 3       # 同时下载数量
 RETRY_TIMES = 3       # 失败重试次数
