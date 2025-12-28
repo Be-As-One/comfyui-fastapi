@@ -6,10 +6,8 @@ Civitai LoRA 批量下载脚本 (从 CSV 文件读取)
 
 import requests
 import os
-import re
 import time
 import csv
-from urllib.parse import unquote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==================== 配置 ====================
@@ -69,41 +67,30 @@ def format_size(size_bytes):
 
 def download_model(version_id, name, index, total):
     """下载单个模型"""
-    safe_name = re.sub(r'[<>:"/\\|?*]', '', name)[:50].strip()
+    # 使用 CSV 中定义的标准化文件名
+    target_filename = name  # CSV 中的标准化文件名
+    target_filepath = os.path.join(SAVE_DIR, target_filename)
+
+    # 检查是否已存在（使用标准化文件名）
+    if os.path.exists(target_filepath):
+        size = os.path.getsize(target_filepath)
+        return (True, f"[{index}/{total}] ⏭ 跳过(已存在): {target_filename} ({format_size(size)})")
+
     url = f"https://civitai.com/api/download/models/{version_id}?token={API_KEY}"
-    
+
     for attempt in range(RETRY_TIMES):
         try:
             response = requests.get(url, stream=True, timeout=TIMEOUT, allow_redirects=True)
-            
+
             if response.status_code == 200:
-                # 从header获取文件名
-                cd = response.headers.get('content-disposition', '')
-                if 'filename=' in cd:
-                    matches = re.findall(r'filename="?([^";\n]+)"?', cd)
-                    filename = unquote(matches[0]) if matches else f"{safe_name}.safetensors"
-                else:
-                    filename = f"{safe_name}.safetensors"
-                
-                # 清理文件名
-                filename = re.sub(r'[<>:"/\\|?*]', '', filename)
-                filepath = os.path.join(SAVE_DIR, filename)
-                
-                # 检查是否已存在
-                if os.path.exists(filepath):
-                    size = os.path.getsize(filepath)
-                    return (True, f"[{index}/{total}] ⏭ 跳过(已存在): {filename} ({format_size(size)})")
-                
-                # 下载文件
-                total_size = int(response.headers.get('content-length', 0))
-                
-                with open(filepath, 'wb') as f:
+                # 直接保存为 CSV 中定义的标准化文件名
+                with open(target_filepath, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=8192):
                         f.write(chunk)
-                
-                size = os.path.getsize(filepath)
-                return (True, f"[{index}/{total}] ✓ {filename} ({format_size(size)})")
-            
+
+                size = os.path.getsize(target_filepath)
+                return (True, f"[{index}/{total}] ✓ {target_filename} ({format_size(size)})")
+
             elif response.status_code == 404:
                 return (False, f"[{index}/{total}] ✗ {name[:30]} - 模型不存在(404)")
             else:
@@ -111,7 +98,7 @@ def download_model(version_id, name, index, total):
                     time.sleep(2)
                     continue
                 return (False, f"[{index}/{total}] ✗ {name[:30]} - HTTP {response.status_code}")
-                
+
         except requests.exceptions.Timeout:
             if attempt < RETRY_TIMES - 1:
                 time.sleep(2)
