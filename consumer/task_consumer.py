@@ -2,6 +2,7 @@
 任务消费者
 """
 import asyncio
+from typing import Optional
 from utils import get_task_api_urls
 import httpx
 from loguru import logger
@@ -29,37 +30,52 @@ class TaskConsumer:
 
     async def fetch_task(self):
         """从多个任务源轮询获取一个待处理任务"""
+        allowed_workflows = workflow_filter.get_allowed_workflows()
+
+        # 确定要传递的工作流筛选参数
+        workflow_names_param = None
+        if allowed_workflows and '*' not in allowed_workflows:
+            # 有特定的允许工作流列表，作为数组传递
+            workflow_names_param = allowed_workflows
+            logger.debug(f"🎯 使用工作流筛选: {workflow_names_param}")
+        else:
+            logger.debug("📋 不使用工作流筛选（允许所有）")
+
         # 轮询所有配置的API源
         for api_url in self.api_urls:
             url = f"{api_url}/api/comm/task/fetch"
-            logger.debug(f"Fetching task from: {url}")
+            workflows_desc = ', '.join(workflow_names_param) if workflow_names_param else "any"
+            logger.debug(f"Fetching task from: {url} (workflows: {workflows_desc})")
 
-            task = await self._try_fetch_from_url(url)
+            task = await self._try_fetch_from_url(url, workflow_names_param)
             if task:
                 logger.info(
-                    f"Successfully got task {task.get('taskId')} from: {api_url}")
+                    f"✅ Successfully got task {task.get('taskId')} from: {api_url} (workflows: {workflows_desc})")
                 return task
             else:
-                logger.debug(f"No task available from: {api_url}")
+                logger.debug(f"No task available from: {api_url} (workflows: {workflows_desc})")
 
         # 所有源都没有任务
         logger.debug("No tasks available from any configured source")
         return None
 
-    async def _try_fetch_from_url(self, url: str):
-        """尝试从单个URL获取任务"""
+    async def _try_fetch_from_url(self, url: str, workflow_names: Optional[list] = None):
+        """尝试从单个URL获取任务
+
+        Args:
+            url: API端点URL
+            workflow_names: 可选的工作流名称列表，用于筛选特定工作流的任务
+        """
         # 获取API基础URL（移除路径部分）
         api_base_url = url.split('/api/comm/task/fetch')[0]
 
         try:
-            # 构建请求参数，添加工作流筛选
+            # 构建请求参数
             params = {}
-            allowed_workflows = workflow_filter.get_allowed_workflows()
-
-            # 如果有特定的允许工作流（不是允许所有），则添加筛选参数
-            if allowed_workflows and '*' not in allowed_workflows:
-                params['workflowNames'] = allowed_workflows
-                logger.debug(f"🎯 请求任务时添加工作流筛选: {allowed_workflows}")
+            if workflow_names:
+                # FastAPI 的 Query(List[str]) 需要传递多个同名参数
+                # httpx 会自动处理列表参数
+                params['workflow_names'] = workflow_names
 
             async with httpx.AsyncClient(
                 timeout=10.0,
