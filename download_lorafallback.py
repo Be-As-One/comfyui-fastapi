@@ -2,6 +2,15 @@
 """
 HuggingFace Lora 备用下载脚本
 用法: python download_lorafallback.py
+
+两个通用的lora下载
+wget "https://civitai-delivery-worker-prod.5ac0637cfd0766c97916cefa3764fbdf.r2.cloudflarestorage.com/model/40224/nsfw22LE8.xZ6f.safetensors?X-Amz-
+Expires=86400&response-content-disposition=attachment%3B%20filename%3D%22NSFW-22-L-e8.safetensors%22&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=e01358d793ad6966166af8b3064953a
+d/20251229/us-east-1/s3/aws4_request&X-Amz-Date=20251229T095559Z&X-Amz-SignedHeaders=host&X-Amz-Signature=1fc750de09b7c9e415945d99a3b1721384132fc73205b184f8e58b9a465e333c" -O /worksp
+ace/shared-models/loras/NSFW-22-L-e8.safetensors
+
+wget "https://civitai-delivery-worker-prod.5ac0637cfd0766c97916cefa3764fbdf.r2.cloudflarestorage.com/model/40224/nsfw22HE8.BOcA.safetensors?X-Amz-Expires=86400&response-content-disposition=attachment%3B%20filename%3D%22NSFW-22-H-e8.safetensors%22&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=e01358d793ad6966166af8b3064953ad/20251229/us-east-1/s3/aws4_request&X-Amz-Date=20251229T095556Z&X-Amz-SignedHeaders=host&X-Amz-Signature=9d29e9eddeaeb370d1f6548fe2776dcc8918a4fb37ef4fa39df31ecbcebe3053" -O /workspace/shared-models/loras/NSFW-22-H-e8.safetensors
+
 """
 
 import os

@@ -54,7 +54,8 @@ class ResultCallback:
         message: Optional[str] = None,
         queued_at: Optional[str] = None,
         queue_name: Optional[str] = None,
-        priority: Optional[str] = None
+        priority: Optional[str] = None,
+        callback_url: Optional[str] = None
     ) -> bool:
         """
         回调 z-image /api/comm/task/update 接口
@@ -69,10 +70,18 @@ class ResultCallback:
             queued_at: 入队时间
             queue_name: 队列名称
             priority: 任务优先级
+            callback_url: 自定义回调地址（优先使用，如果未提供则使用默认配置）
         """
-        if not self.callback_url:
+        # 优先使用任务自带的 callback_url，否则使用默认配置
+        url = callback_url or self.callback_url
+
+        if not url:
             logger.debug(f"未配置回调地址，跳过 API 回调")
             return True
+
+        # 记录使用的回调地址来源
+        url_source = "任务自带" if callback_url else "默认配置"
+        logger.debug(f"使用 {url_source} 的回调地址: {url}")
 
         # 计算耗时
         duration_ms = None
@@ -95,7 +104,7 @@ class ResultCallback:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    self.callback_url,
+                    url,
                     json=payload,
                     headers={"Content-Type": "application/json"}
                 )
@@ -121,7 +130,8 @@ class ResultCallback:
         task_id: str,
         queued_at: Optional[str] = None,
         queue_name: Optional[str] = None,
-        priority: Optional[str] = None
+        priority: Optional[str] = None,
+        callback_url: Optional[str] = None
     ) -> bool:
         """
         标记任务为处理中
@@ -131,6 +141,7 @@ class ResultCallback:
             queued_at: 入队时间（从任务数据中获取）
             queue_name: 队列名称
             priority: 任务优先级
+            callback_url: 自定义回调地址（优先使用任务自带的，否则使用默认配置）
 
         Returns:
             是否回调成功
@@ -147,7 +158,8 @@ class ResultCallback:
             started_at=started_at,
             queued_at=queued_at,
             queue_name=queue_name,
-            priority=priority
+            priority=priority,
+            callback_url=callback_url
         )
 
         logger.info(f"🔄 任务 {task_id} 开始处理 (队列: {queue_name}, 优先级: {priority})")
@@ -162,6 +174,7 @@ class ResultCallback:
         queued_at: Optional[str] = None,
         queue_name: Optional[str] = None,
         priority: Optional[str] = None,
+        callback_url: Optional[str] = None,
         **kwargs
     ) -> bool:
         """
@@ -175,6 +188,7 @@ class ResultCallback:
             queued_at: 入队时间
             queue_name: 队列名称
             priority: 任务优先级
+            callback_url: 自定义回调地址（优先使用任务自带的，否则使用默认配置）
 
         Returns:
             是否回调成功
@@ -195,7 +209,8 @@ class ResultCallback:
             queue_name=queue_name,
             priority=priority,
             output_data={"urls": urls} if urls else None,
-            message=error
+            message=error,
+            callback_url=callback_url
         )
 
         logger.info(f"✅ 任务 {task_id} 状态已更新为 {status}")

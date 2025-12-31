@@ -186,14 +186,18 @@ class TaskConsumer:
             if self.consumer_mode == 'redis_queue':
                 await self.result_callback.send_success(
                     task_id=task_id,
-                    result=test_result
+                    result=test_result,
+                    callback_url=callback_url
                 )
             logger.info(f"[TEST] 测试任务 {task_id} 已标记完成")
             return test_result
 
         # Redis 队列模式下标记任务为处理中
         if self.consumer_mode == 'redis_queue':
-            await self.result_callback.send_processing(task_id)
+            await self.result_callback.send_processing(
+                task_id=task_id,
+                callback_url=callback_url
+            )
 
         try:
             # 根据工作流名称获取对应的处理器
@@ -219,7 +223,8 @@ class TaskConsumer:
                 if self.consumer_mode == 'redis_queue':
                     await self.result_callback.send_success(
                         task_id=task_id,
-                        result=result
+                        result=result,
+                        callback_url=callback_url
                     )
             else:
                 logger.error(
@@ -230,7 +235,8 @@ class TaskConsumer:
                 if self.consumer_mode == 'redis_queue':
                     await self.result_callback.send_failure(
                         task_id=task_id,
-                        error="处理器返回空结果"
+                        error="处理器返回空结果",
+                        callback_url=callback_url
                     )
 
             return result
@@ -244,7 +250,8 @@ class TaskConsumer:
             if self.consumer_mode == 'redis_queue':
                 await self.result_callback.send_failure(
                     task_id=task_id,
-                    error=str(e)
+                    error=str(e),
+                    callback_url=callback_url
                 )
 
             return None
