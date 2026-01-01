@@ -10,7 +10,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 
 # 加载 .env 文件（优先 .env.prod，然后 .env）
 # 使用绝对路径确保在任何工作目录下都能找到
-APP_ENV ="test"
+APP_ENV ="prod"
 _env_prod = _PROJECT_ROOT / '.env.prod'
 _env_file = _PROJECT_ROOT / '.env.test'
 
@@ -110,7 +110,8 @@ FACEFUSION_ROOT = os.getenv('FACEFUSION_ROOT', '/Users/hzy/Code/zhuilai/video-fa
 # 允许的工作流列表（逗号分隔，支持通配符 *）
 # 示例: "comfyui_*,basic_generation" 或 "*" 表示允许所有
 # 留空或设为 "*" 表示允许所有工作流
-ALLOWED_WORKFLOWS = os.getenv('ALLOWED_WORKFLOWS', '*')
+ALLOWED_WORKFLOWS = "video-wan2-2-14b-i2v"
+# ALLOWED_WORKFLOWS = "*"
 
 # 是否记录被过滤的任务（用于调试）
 LOG_FILTERED_TASKS = get_env_bool('LOG_FILTERED_TASKS', True)
@@ -123,11 +124,11 @@ REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 REDIS_MAX_CONNECTIONS = get_env_int('REDIS_MAX_CONNECTIONS', 50)
 
 # Upstash Redis REST API 配置（远程Redis）
-UPSTASH_REDIS_REST_URL="https://capital-macaque-38589.upstash.io"
-UPSTASH_REDIS_REST_TOKEN="AZa9AAIncDIxYzEyNmNlOTcwZWM0MmYxYWZiYTQzMmJiMDc1MTYzOHAyMzg1ODk"
+UPSTASH_REDIS_REST_URL="https://saved-jackal-19117.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="AUqtAAIncDI1Y2Y3NWRhNzZhZjg0MTQyODY1YzBiYjIyMDNmYTE1N3AyMTkxMTc"
 
 # 任务管理器类型: 'memory' 或 'redis'
-TASK_MANAGER_TYPE = os.getenv('TASK_MANAGER_TYPE', 'memory')
+TASK_MANAGER_TYPE = "redis"
 
 # 消费者模式: 'redis_queue' (Redis三级优先队列) 或 'http' (HTTP轮询)
 CONSUMER_MODE = os.getenv('CONSUMER_MODE', 'redis_queue')
