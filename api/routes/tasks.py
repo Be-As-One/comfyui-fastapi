@@ -1,7 +1,7 @@
 """
 任务相关API路由
 """
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from core.task_manager import task_manager
@@ -61,33 +61,21 @@ async def update_task(request: TaskUpdateRequest):
 
 
 @router.get("/comm/task/fetch")
-async def fetch_task_comm(workflow_names: Optional[List[str]] = Query(None)):
+async def fetch_task_comm(workflow_names: Optional[str] = Query(None)):
     """获取待处理任务 - 统一通信端点
 
     Args:
-        workflow_names: 可选的工作流名称列表（数组格式），支持：
-                       - 多个值: ?workflow_names=a&workflow_names=b
-                       - 单个值: ?workflow_names=a
-                       - 逗号分隔（兼容）: ?workflow_names=a,b（会自动分割）
+        workflow_names: 可选的工作流名称，逗号分隔的字符串
+                       例如: 'wan_video,clothes_prompt_changer_with_auto'
+                       单个值: 'wan_video'
 
     Returns:
         成功时返回任务数据，无任务时返回 data: None
     """
-    # 统一处理为数组格式，支持逗号分隔的字符串（向后兼容）
+    # 处理逗号分隔的字符串
     workflows_list = None
     if workflow_names:
-        # 扁平化处理：如果数组元素中包含逗号，分割它们
-        workflows_list = []
-        for name in workflow_names:
-            if ',' in name:
-                # 逗号分隔的字符串，分割成多个
-                workflows_list.extend([w.strip() for w in name.split(',') if w.strip()])
-            else:
-                workflows_list.append(name.strip())
-
-        # 去重并过滤空字符串
-        workflows_list = list(set(w for w in workflows_list if w))
-        workflows_list = workflows_list if workflows_list else None
+        workflows_list = [w.strip() for w in workflow_names.split(',') if w.strip()]
 
     task = task_manager.get_next_task(workflow_names=workflows_list)
     if not task:

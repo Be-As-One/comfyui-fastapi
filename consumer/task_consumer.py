@@ -91,9 +91,9 @@ class TaskConsumer:
             # 构建请求参数
             params = {}
             if workflow_names:
-                # FastAPI 的 Query(List[str]) 需要传递多个同名参数
-                # httpx 会自动处理列表参数
-                params['workflow_names'] = workflow_names
+                # 转换为逗号分隔的字符串格式
+                # 例如: ?workflow_names=a,b,c
+                params['workflow_names'] = ','.join(workflow_names)
 
             async with httpx.AsyncClient(
                 timeout=10.0,
