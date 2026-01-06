@@ -113,16 +113,31 @@ class ResultCallback:
                     logger.info(f"✅ 任务 {task_id} API 回调成功 ({status})")
                     return True
                 else:
-                    logger.warning(
-                        f"⚠️ 任务 {task_id} API 回调返回 {response.status_code}: {response.text[:200]}"
+                    # 非2xx状态码，打印详细错误信息
+                    logger.error(
+                        f"⚠️ 任务 {task_id} API 回调返回 {response.status_code}\n"
+                        f"  URL: {url}\n"
+                        f"  请求payload: {payload}\n"
+                        f"  响应body: {response.text}"
                     )
                     return False
 
         except httpx.TimeoutException:
-            logger.error(f"❌ 任务 {task_id} API 回调超时")
+            logger.error(
+                f"❌ 任务 {task_id} API 回调超时\n"
+                f"  URL: {url}\n"
+                f"  请求payload: {payload}\n"
+                f"  超时时间: {self.timeout}s"
+            )
             return False
         except Exception as e:
-            logger.error(f"❌ 任务 {task_id} API 回调失败: {e}")
+            logger.error(
+                f"❌ 任务 {task_id} API 回调失败\n"
+                f"  错误类型: {type(e).__name__}\n"
+                f"  URL: {url}\n"
+                f"  请求payload: {payload}\n"
+                f"  异常: {str(e)}"
+            )
             return False
 
     async def send_processing(
