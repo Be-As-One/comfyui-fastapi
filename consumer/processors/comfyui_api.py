@@ -244,7 +244,33 @@ class ComfyUI:
                                 if current_node:
                                     logger.debug(f"执行节点: {current_node}")
                                 else:
-                                    logger.debug("所有节点执行完成")
+                                    # 执行结束，但继续读取后续消息以捕获 executed 输出
+                                    logger.debug("所有节点执行完成，继续读取 executed 消息...")
+                                    # 设置短超时继续读取可能的 executed 消息
+                                    self.ws.settimeout(2)
+                                    try:
+                                        while True:
+                                            try:
+                                                extra_msg = self.ws.recv()
+                                                if isinstance(extra_msg, str):
+                                                    extra_data = json.loads(extra_msg)
+                                                    logger.debug(f"后续消息: type={extra_data.get('type')}")
+                                                    if extra_data.get("type") == "executed":
+                                                        extra_content = extra_data.get("data", {})
+                                                        if extra_content.get("prompt_id") == prompt_id:
+                                                            node_id = extra_content.get("node")
+                                                            output = extra_content.get("output", {})
+                                                            if node_id and output:
+                                                                executed_outputs[node_id] = output
+                                                                logger.debug(f"✓ 捕获后续节点 {node_id} 的 executed 输出: {list(output.keys())}")
+                                            except WebSocketTimeoutException:
+                                                logger.debug("后续消息读取完成")
+                                                break
+                                            except Exception as e:
+                                                logger.debug(f"读取后续消息出错: {e}")
+                                                break
+                                    finally:
+                                        self.ws.settimeout(timeout)
                                     break  # 执行结束
                             elif msg_prompt_id:
                                 logger.debug(f"收到其他prompt的执行消息: {msg_prompt_id}")
@@ -279,15 +305,18 @@ class ComfyUI:
                                 except Exception as e:
                                     logger.error(f"进度回调失败: {str(e)}")
                         elif data["type"] == "executed":
-                            # 捕获 executed 消息中的节点输出（VHS_VideoCombine 等节点的输出在这里）
+                            # 捕获 executed 消息中的节点输出（VHS_VideoCombine、SaveVideo 等节点的输出在这里）
                             data_content = data.get("data", {})
                             msg_prompt_id = data_content.get("prompt_id")
+                            node_id = data_content.get("node")
+                            output = data_content.get("output", {})
+                            logger.debug(f"收到 executed 消息: node={node_id}, prompt_id={msg_prompt_id}, output_keys={list(output.keys()) if output else []}")
                             if msg_prompt_id == prompt_id:
-                                node_id = data_content.get("node")
-                                output = data_content.get("output", {})
                                 if node_id and output:
                                     executed_outputs[node_id] = output
-                                    logger.debug(f"捕获节点 {node_id} 的 executed 输出: {list(output.keys())}")
+                                    logger.debug(f"✓ 捕获节点 {node_id} 的 executed 输出: {list(output.keys())}")
+                                elif node_id:
+                                    logger.debug(f"节点 {node_id} 的 executed 输出为空")
                         else:
                             logger.debug(f"收到其他消息: type={data.get('type')}")
                     except json.JSONDecodeError as e:
