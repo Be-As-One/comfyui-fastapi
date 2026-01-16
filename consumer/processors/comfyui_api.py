@@ -176,8 +176,12 @@ class ComfyUI:
             raise
 
 
-    def wait_for_completion(self, prompt_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> None:
-        """使用WebSocket等待执行完成"""
+    def wait_for_completion(self, prompt_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> dict:
+        """使用WebSocket等待执行完成，同时收集executed消息中的输出
+
+        Returns:
+            dict: 从 executed 消息中收集的节点输出 {node_id: output_data}
+        """
         # 确保 WebSocket 已连接且活跃
         if not self.ws_connected or not self.is_websocket_alive():
             self.connect_websocket()
@@ -189,6 +193,9 @@ class ComfyUI:
         # 进度通知控制变量
         last_progress_time = 0
         progress_interval = 3  # 最少3秒间隔才发送进度更新
+
+        # 收集 executed 消息中的输出（用于捕获 VHS_VideoCombine 等节点的输出）
+        executed_outputs = {}
 
         try:
             while True:
@@ -271,6 +278,16 @@ class ComfyUI:
                                     last_progress_time = current_time
                                 except Exception as e:
                                     logger.error(f"进度回调失败: {str(e)}")
+                        elif data["type"] == "executed":
+                            # 捕获 executed 消息中的节点输出（VHS_VideoCombine 等节点的输出在这里）
+                            data_content = data.get("data", {})
+                            msg_prompt_id = data_content.get("prompt_id")
+                            if msg_prompt_id == prompt_id:
+                                node_id = data_content.get("node")
+                                output = data_content.get("output", {})
+                                if node_id and output:
+                                    executed_outputs[node_id] = output
+                                    logger.debug(f"捕获节点 {node_id} 的 executed 输出: {list(output.keys())}")
                         else:
                             logger.debug(f"收到其他消息: type={data.get('type')}")
                     except json.JSONDecodeError as e:
@@ -290,6 +307,9 @@ class ComfyUI:
             self.ws_connected = False
             raise
 
+        logger.debug(f"WebSocket 收集到 {len(executed_outputs)} 个节点的 executed 输出")
+        return executed_outputs
+
     def get_workflow_results(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
         """执行工作流并获取所有结果文件"""
         logger.debug(f"开始工作流执行流程")
@@ -301,9 +321,9 @@ class ComfyUI:
         prompt_id = self.queue_prompt(prompt)
         logger.debug(f"Prompt已提交: {prompt_id}")
 
-        # 2. 等待执行完成
+        # 2. 等待执行完成，同时收集 WebSocket executed 消息中的输出
         logger.debug("等待工作流执行完成...")
-        self.wait_for_completion(prompt_id, timeout, task_id, progress_callback)
+        ws_executed_outputs = self.wait_for_completion(prompt_id, timeout, task_id, progress_callback)
 
         # 3. 获取执行历史和结果
         logger.debug("获取执行结果...")
@@ -314,8 +334,18 @@ class ComfyUI:
             return []
 
         prompt_history = history[prompt_id]
-        outputs = prompt_history.get("outputs", {})
-        logger.debug(f"找到 {len(outputs)} 个输出节点")
+        history_outputs = prompt_history.get("outputs", {})
+        logger.debug(f"History 中找到 {len(history_outputs)} 个输出节点")
+        logger.debug(f"WebSocket executed 中找到 {len(ws_executed_outputs)} 个输出节点")
+
+        # 合并输出：优先使用 WebSocket executed 输出（更规范），history 作为补充
+        outputs = dict(ws_executed_outputs)  # 先用 WebSocket 输出
+        for node_id, node_output in history_outputs.items():
+            if node_id not in outputs:
+                outputs[node_id] = node_output
+                logger.debug(f"从 History 补充节点 {node_id} 的输出")
+
+        logger.debug(f"合并后共 {len(outputs)} 个输出节点")
 
         # 详细记录每个输出节点的信息，帮助诊断问题
         for node_id, node_output in outputs.items():
