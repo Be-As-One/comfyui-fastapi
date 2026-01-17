@@ -364,24 +364,25 @@ class ComfyUI:
 
         prompt_history = history[prompt_id]
         history_outputs = prompt_history.get("outputs", {})
-        logger.debug(f"History 中找到 {len(history_outputs)} 个输出节点")
-        logger.debug(f"WebSocket executed 中找到 {len(ws_executed_outputs)} 个输出节点")
+        logger.info(f"📊 History 中找到 {len(history_outputs)} 个输出节点: {list(history_outputs.keys())}")
+        logger.info(f"📊 WebSocket executed 中找到 {len(ws_executed_outputs)} 个输出节点: {list(ws_executed_outputs.keys())}")
 
         # 合并输出：优先使用 WebSocket executed 输出（更规范），history 作为补充
         outputs = dict(ws_executed_outputs)  # 先用 WebSocket 输出
         for node_id, node_output in history_outputs.items():
             if node_id not in outputs:
                 outputs[node_id] = node_output
-                logger.debug(f"从 History 补充节点 {node_id} 的输出")
+                logger.info(f"从 History 补充节点 {node_id} 的输出")
 
-        logger.debug(f"合并后共 {len(outputs)} 个输出节点")
+        logger.info(f"📊 合并后共 {len(outputs)} 个输出节点")
 
         # 详细记录每个输出节点的信息，帮助诊断问题
+        logger.info(f"🔍 开始分析 {len(outputs)} 个输出节点...")
         for node_id, node_output in outputs.items():
             node_data = prompt.get(node_id, {})
             class_type = node_data.get("class_type", "unknown")
-            logger.debug(f"输出节点 {node_id}: class_type={class_type}, output_keys={list(node_output.keys())}")
-            logger.debug(f"输出节点 {node_id} 完整数据: {node_output}")
+            logger.info(f"输出节点 {node_id}: class_type={class_type}, output_keys={list(node_output.keys())}")
+            logger.info(f"输出节点 {node_id} 完整数据: {node_output}")
 
         # 6. 使用结果节点注册表收集所有结果
         output_urls = []
@@ -389,7 +390,7 @@ class ComfyUI:
         # 使用结果节点服务收集所有结果
         from services.node_service import node_service
         upload_tasks = node_service.collect_workflow_results(prompt, outputs, message_id)
-        logger.debug(f"收集到 {len(upload_tasks)} 个上传任务")
+        logger.info(f"📦 收集到 {len(upload_tasks)} 个上传任务")
         
         # 处理收集到的上传任务，获取实际的文件数据
         for task in upload_tasks:

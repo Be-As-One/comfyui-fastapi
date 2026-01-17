@@ -401,6 +401,32 @@ class SaveVideoResultHandler(ResultNodeHandler):
                 if upload_tasks:
                     return
 
+        # Fallback：如果上面都没有收集到结果，尝试从节点配置的 filename_prefix 构造
+        tasks_for_this_node = len([t for t in upload_tasks if t.get('node_id') == node_id])
+        if tasks_for_this_node == 0:
+            inputs = node_data.get("inputs", {})
+            filename_prefix = inputs.get("filename_prefix", "")
+            if filename_prefix:
+                from datetime import datetime
+                import os
+
+                # SaveVideo 默认输出 mp4
+                file_ext = '.mp4'
+                # 构造文件名: prefix + 00001 + ext
+                filename = f"{filename_prefix}_00001{file_ext}"
+                path = f"{datetime.now():%Y%m%d}/{message_id}_video_{len(upload_tasks)}{file_ext}"
+
+                upload_tasks.append({
+                    'type': 'video',
+                    'filename': filename,
+                    'subfolder': '',
+                    'folder_type': 'output',
+                    'path': path,
+                    'node_id': node_id
+                })
+                logger.info(f"✓ SaveVideo fallback 根据 filename_prefix 构造: {filename}")
+                return
+
         logger.warning(f"SaveVideo节点 {node_id} 没有找到视频输出，可用字段: {list(node_output.keys())}")
 
     def get_result_type(self) -> str:
@@ -533,18 +559,20 @@ class ResultNodeService:
         """
         upload_tasks = []
 
+        logger.info(f"🔍 collect_workflow_results: 收到 {len(outputs)} 个输出节点, prompt有 {len(prompt)} 个节点")
+
         for node_id, node_output in outputs.items():
             # 获取节点配置数据
             node_data = prompt.get(node_id, {})
+            class_type = node_data.get("class_type", "unknown")
 
             # 寻找合适的结果处理器
             handler = self.get_handler(node_data)
             if handler:
-                logger.debug(f"找到结果处理器 {handler.__class__.__name__} 处理节点 {node_id}")
+                logger.info(f"✓ 节点 {node_id} ({class_type}) -> {handler.__class__.__name__}")
                 handler.collect_results(node_id, node_data, node_output, message_id, upload_tasks)
             else:
-                class_type = node_data.get("class_type", "unknown")
-                logger.debug(f"没有找到结果处理器处理节点 {node_id} (类型: {class_type})")
+                logger.info(f"✗ 节点 {node_id} ({class_type}) 没有对应的处理器")
 
-        logger.debug(f"总共收集到 {len(upload_tasks)} 个结果任务")
+        logger.info(f"📦 collect_workflow_results 完成: 收集到 {len(upload_tasks)} 个上传任务")
         return upload_tasks
