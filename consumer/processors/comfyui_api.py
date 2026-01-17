@@ -317,6 +317,45 @@ class ComfyUI:
                                     logger.debug(f"✓ 捕获节点 {node_id} 的 executed 输出: {list(output.keys())}")
                                 elif node_id:
                                     logger.debug(f"节点 {node_id} 的 executed 输出为空")
+                        elif data["type"] == "execution_error":
+                            # ComfyUI 执行错误
+                            error_data = data.get("data", {})
+                            error_prompt_id = error_data.get("prompt_id")
+                            if error_prompt_id == prompt_id:
+                                node_id = error_data.get("node_id", "unknown")
+                                node_type = error_data.get("node_type", "unknown")
+                                exception_message = error_data.get("exception_message", "未知错误")
+                                exception_type = error_data.get("exception_type", "Exception")
+                                traceback_info = error_data.get("traceback", [])
+
+                                # 格式化错误信息
+                                error_msg = f"""
+╔══════════════════════════════════════════════════════════════════
+║ 🔴 ComfyUI 执行错误
+╠══════════════════════════════════════════════════════════════════
+║ 节点ID: {node_id}
+║ 节点类型: {node_type}
+║ 错误类型: {exception_type}
+║ 错误信息: {exception_message}
+╠══════════════════════════════════════════════════════════════════
+║ 调用栈:
+"""
+                                for line in traceback_info[-5:]:  # 只显示最后5行
+                                    error_msg += f"║   {line}\n"
+                                error_msg += "╚══════════════════════════════════════════════════════════════════"
+
+                                logger.error(error_msg)
+
+                                # 抛出异常，让上层处理
+                                raise Exception(f"ComfyUI执行错误 [{node_type}]: {exception_message}")
+                        elif data["type"] == "execution_cached":
+                            # 节点使用了缓存，跳过
+                            logger.debug(f"节点使用缓存: {data.get('data', {}).get('nodes', [])}")
+                        elif data["type"] == "status":
+                            # 状态消息
+                            status_data = data.get("data", {}).get("status", {})
+                            queue_remaining = status_data.get("exec_info", {}).get("queue_remaining", 0)
+                            logger.debug(f"队列状态: 剩余 {queue_remaining} 个任务")
                         else:
                             logger.debug(f"收到其他消息: type={data.get('type')}")
                     except json.JSONDecodeError as e:
@@ -363,6 +402,38 @@ class ComfyUI:
             return []
 
         prompt_history = history[prompt_id]
+
+        # 检查是否有执行错误
+        status = prompt_history.get("status", {})
+        if status.get("status_str") == "error":
+            # 从 status 中获取错误信息
+            messages = status.get("messages", [])
+            for msg_type, msg_data in messages:
+                if msg_type == "execution_error":
+                    node_id = msg_data.get("node_id", "unknown")
+                    node_type = msg_data.get("node_type", "unknown")
+                    exception_message = msg_data.get("exception_message", "未知错误")
+                    exception_type = msg_data.get("exception_type", "Exception")
+                    traceback_info = msg_data.get("traceback", [])
+
+                    error_msg = f"""
+╔══════════════════════════════════════════════════════════════════
+║ 🔴 ComfyUI 执行错误 (来自 History)
+╠══════════════════════════════════════════════════════════════════
+║ 节点ID: {node_id}
+║ 节点类型: {node_type}
+║ 错误类型: {exception_type}
+║ 错误信息: {exception_message}
+╠══════════════════════════════════════════════════════════════════
+║ 调用栈:
+"""
+                    for line in traceback_info[-5:]:
+                        error_msg += f"║   {line}\n"
+                    error_msg += "╚══════════════════════════════════════════════════════════════════"
+
+                    logger.error(error_msg)
+                    raise Exception(f"ComfyUI执行错误 [{node_type}]: {exception_message}")
+
         history_outputs = prompt_history.get("outputs", {})
         logger.info(f"📊 History 中找到 {len(history_outputs)} 个输出节点: {list(history_outputs.keys())}")
         logger.info(f"📊 WebSocket executed 中找到 {len(ws_executed_outputs)} 个输出节点: {list(ws_executed_outputs.keys())}")
