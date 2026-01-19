@@ -130,14 +130,24 @@ class ComfyUIProcessor:
                         f"  - result[{i}]: {result} (类型: {type(result)})")
 
             # 根据结果更新任务状态
+            # results 现在是 [{url, width, height, duration, ...}, ...] 格式
             if results and len(results) > 0:
                 logger.info(f"✅ 任务执行成功，生成了 {len(results)} 个结果")
+
+                # 提取 URL 列表（保持向后兼容）
+                urls = [r['url'] if isinstance(r, dict) else r for r in results]
+                # 完整结果列表（包含元数据）
+                media_results = results if isinstance(results[0], dict) else [{'url': r} for r in results]
+
                 logger.debug(f"🚀 准备调用_update_task_status更新为COMPLETED状态")
-                logger.debug(f"🚀 output_data将设置为: {{'urls': {results}}}")
+                logger.debug(f"🚀 output_data: urls={urls}, results={media_results}")
 
                 update_success = self._update_task_status(
                     task_id, "COMPLETED",
-                    output_data={"urls": results},
+                    output_data={
+                        "urls": urls,
+                        "results": media_results,  # 包含 url, width, height, duration 等
+                    },
                     started_at=task_started_at,
                     finished_at=datetime.now(timezone.utc),
                     source_channel=source_channel
@@ -220,7 +230,7 @@ class ComfyUIProcessor:
                 f"🔗 使用ComfyUI客户端，连接复用次数: {comfyui.connection_reuse_count}")
 
             logger.info(f"🚀 开始生成图像 (环境: {environment}, 端口: {target_port})...")
-            logger.debug(f"🎯 调用comfyui.get_images，参数:")
+            logger.debug(f"🎯 调用comfyui.get_workflow_results，参数:")
             logger.debug(f"  - wf_json类型: {type(wf_json)}")
             logger.debug(f"  - task_id: {task_id}")
 
@@ -232,7 +242,9 @@ class ComfyUIProcessor:
                 self._update_task_status(
                     task_id, status, message, started_at=task_started_at, source_channel=source_channel)
 
-            results = comfyui.get_images(
+            # 使用 get_workflow_results 获取包含元数据的完整结果
+            # 返回格式: [{url, width, height, duration?, format?}, ...]
+            results = comfyui.get_workflow_results(
                 wf_json, task_id, task_id=task_id, progress_callback=progress_callback)
 
             logger.debug(f"🎯 ComfyUI API返回结果分析:")

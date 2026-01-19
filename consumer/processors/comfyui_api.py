@@ -378,8 +378,12 @@ class ComfyUI:
         logger.debug(f"WebSocket 收集到 {len(executed_outputs)} 个节点的 executed 输出")
         return executed_outputs
 
-    def get_workflow_results(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
-        """执行工作流并获取所有结果文件"""
+    def get_workflow_results(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[dict]:
+        """执行工作流并获取所有结果文件
+
+        Returns:
+            list[dict]: 结果列表，每项包含 url, width, height, duration(可选) 等字段
+        """
         logger.debug(f"开始工作流执行流程")
 
         # 0. 确保 WebSocket 连接正常
@@ -456,23 +460,31 @@ class ComfyUI:
             logger.info(f"输出节点 {node_id} 完整数据: {node_output}")
 
         # 6. 使用结果节点注册表收集所有结果
-        output_urls = []
+        output_results = []  # 改为存储包含元数据的结果
 
         # 使用结果节点服务收集所有结果
         from services.node_service import node_service
+        from services.media_service import media_service
         upload_tasks = node_service.collect_workflow_results(prompt, outputs, message_id)
         logger.info(f"📦 收集到 {len(upload_tasks)} 个上传任务")
-        
+
         # 处理收集到的上传任务，获取实际的文件数据
         for task in upload_tasks:
             try:
                 # ComfyUI的/view端点支持多种文件类型，统一处理
                 file_data = self.get_file_from_comfyui(
-                    task['filename'], 
-                    task['subfolder'], 
+                    task['filename'],
+                    task['subfolder'],
                     task['folder_type']
                 )
                 task['file_data'] = file_data
+
+                # 获取媒体元数据（宽高、时长等）
+                metadata = media_service.get_media_metadata_from_bytes(file_data, task['filename'])
+                if metadata:
+                    task['metadata'] = metadata
+                    logger.debug(f"获取元数据成功: {task['filename']} -> {metadata}")
+
                 logger.debug(f"收集{task['type']}文件: {task['filename']}")
             except Exception as e:
                 logger.error(f"获取文件失败: {task['filename']}, 错误: {str(e)}")
@@ -498,29 +510,34 @@ class ComfyUI:
                 except Exception as e:
                     logger.error(f"上传文件失败: {task['filename']}, 错误: {str(e)}")
                     return None
-            
+
             # 使用线程池并发上传
             with ThreadPoolExecutor(max_workers=4) as executor:
                 # 提交所有上传任务
                 future_to_task = {executor.submit(upload_single_file, task): task for task in valid_upload_tasks}
-                
+
                 # 收集上传结果
                 for future in as_completed(future_to_task):
                     task = future_to_task[future]
                     try:
                         url = future.result()
                         if url:
-                            # 存储提供商已返回完整的 URL，直接使用
-                            output_urls.append(url)
+                            # 构建包含元数据的结果
+                            result = {'url': url}
+                            if 'metadata' in task:
+                                result.update(task['metadata'])
+                            output_results.append(result)
                     except Exception as e:
                         logger.error(f"处理上传结果时出错: {str(e)}")
 
-        logger.info(f"工作流执行完成! 总共生成 {len(output_urls)} 个结果文件")
-        return output_urls
+        logger.info(f"工作流执行完成! 总共生成 {len(output_results)} 个结果文件")
+        return output_results
 
     def get_images(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
-        """生成图像并获取结果（向后兼容方法）"""
-        return self.get_workflow_results(prompt, message_id, timeout, task_id, progress_callback)
+        """生成图像并获取结果（向后兼容方法，只返回 URL 列表）"""
+        results = self.get_workflow_results(prompt, message_id, timeout, task_id, progress_callback)
+        # 提取 URL 列表，保持向后兼容
+        return [r['url'] if isinstance(r, dict) else r for r in results]
 
     def __del__(self):
         """析构函数，确保 WebSocket 连接被关闭"""
