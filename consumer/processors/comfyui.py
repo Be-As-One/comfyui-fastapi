@@ -295,9 +295,16 @@ class ComfyUIProcessor:
         """预处理工作流"""
         from services.media_service import media_service
         from services.node_service import node_service
+        from services.lora_service import lora_service
 
         logger.debug(f"开始预处理工作流")
         logger.debug(f"工作流包含 {len(wf_json)} 个节点")
+
+        # 1. 修复 Lora 路径（处理子目录问题）
+        try:
+            wf_json = lora_service.fix_workflow_loras(wf_json)
+        except Exception as e:
+            logger.warning(f"Lora 路径修复失败（继续执行）: {e}")
 
         # 使用节点处理器注册表收集远程URL
         logger.debug(f"开始收集远程URL")
