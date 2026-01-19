@@ -319,6 +319,7 @@ class ComfyUI:
                                     # 收到 executed 后，尝试短超时读取后续消息，判断是否完成
                                     # 这是一个备用机制，防止 executing(node=null) 消息丢失
                                     self.ws.settimeout(3)
+                                    execution_completed = False
                                     try:
                                         while True:
                                             try:
@@ -333,8 +334,9 @@ class ComfyUI:
                                                         if extra_content.get("prompt_id") == prompt_id:
                                                             if extra_content.get("node") is None:
                                                                 logger.debug("收到执行完成信号 (executing node=null)")
+                                                                execution_completed = True
                                                                 break
-                                                            # 还有节点在执行，恢复正常超时
+                                                            # 还有节点在执行，恢复正常超时继续外层循环
                                                             self.ws.settimeout(timeout)
                                                             break
                                                     elif extra_type == "executed":
@@ -346,20 +348,25 @@ class ComfyUI:
                                                                 executed_outputs[extra_node_id] = extra_output
                                                                 logger.debug(f"✓ 捕获后续节点 {extra_node_id} 的输出")
                                                     elif extra_type == "execution_error":
-                                                        # 遇到错误，退出
-                                                        self.ws.settimeout(timeout)
+                                                        # 遇到错误，退出内层循环
                                                         break
                                             except WebSocketTimeoutException:
                                                 # 3秒内没有新消息，认为执行已完成
                                                 logger.debug("无后续消息，认为执行已完成")
-                                                self.ws.settimeout(timeout)
-                                                return executed_outputs
+                                                execution_completed = True
+                                                break
                                             except Exception as e:
                                                 logger.debug(f"读取后续消息出错: {e}")
-                                                self.ws.settimeout(timeout)
                                                 break
                                     except Exception:
+                                        pass
+                                    finally:
                                         self.ws.settimeout(timeout)
+
+                                    # 如果确认执行完成，直接返回结果
+                                    if execution_completed:
+                                        logger.info(f"✅ 工作流执行完成，收集到 {len(executed_outputs)} 个节点输出")
+                                        return executed_outputs
                                 elif node_id:
                                     logger.debug(f"节点 {node_id} 的 executed 输出为空")
                         elif data["type"] == "execution_error":
