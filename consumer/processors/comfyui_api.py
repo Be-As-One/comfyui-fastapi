@@ -315,6 +315,51 @@ class ComfyUI:
                                 if node_id and output:
                                     executed_outputs[node_id] = output
                                     logger.debug(f"✓ 捕获节点 {node_id} 的 executed 输出: {list(output.keys())}")
+
+                                    # 收到 executed 后，尝试短超时读取后续消息，判断是否完成
+                                    # 这是一个备用机制，防止 executing(node=null) 消息丢失
+                                    self.ws.settimeout(3)
+                                    try:
+                                        while True:
+                                            try:
+                                                extra_msg = self.ws.recv()
+                                                if isinstance(extra_msg, str):
+                                                    extra_data = json.loads(extra_msg)
+                                                    extra_type = extra_data.get("type")
+                                                    logger.debug(f"后续消息: type={extra_type}")
+
+                                                    if extra_type == "executing":
+                                                        extra_content = extra_data.get("data", {})
+                                                        if extra_content.get("prompt_id") == prompt_id:
+                                                            if extra_content.get("node") is None:
+                                                                logger.debug("收到执行完成信号 (executing node=null)")
+                                                                break
+                                                            # 还有节点在执行，恢复正常超时
+                                                            self.ws.settimeout(timeout)
+                                                            break
+                                                    elif extra_type == "executed":
+                                                        extra_content = extra_data.get("data", {})
+                                                        if extra_content.get("prompt_id") == prompt_id:
+                                                            extra_node_id = extra_content.get("node")
+                                                            extra_output = extra_content.get("output", {})
+                                                            if extra_node_id and extra_output:
+                                                                executed_outputs[extra_node_id] = extra_output
+                                                                logger.debug(f"✓ 捕获后续节点 {extra_node_id} 的输出")
+                                                    elif extra_type == "execution_error":
+                                                        # 遇到错误，退出
+                                                        self.ws.settimeout(timeout)
+                                                        break
+                                            except WebSocketTimeoutException:
+                                                # 3秒内没有新消息，认为执行已完成
+                                                logger.debug("无后续消息，认为执行已完成")
+                                                self.ws.settimeout(timeout)
+                                                return executed_outputs
+                                            except Exception as e:
+                                                logger.debug(f"读取后续消息出错: {e}")
+                                                self.ws.settimeout(timeout)
+                                                break
+                                    except Exception:
+                                        self.ws.settimeout(timeout)
                                 elif node_id:
                                     logger.debug(f"节点 {node_id} 的 executed 输出为空")
                         elif data["type"] == "execution_error":
