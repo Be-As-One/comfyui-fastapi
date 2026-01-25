@@ -96,6 +96,9 @@ COMFYUI_READY_TIMEOUT = get_env_int('COMFYUI_READY_TIMEOUT', 1000)  # 最长等�
 COMFYUI_READY_INTERVAL = get_env_int('COMFYUI_READY_INTERVAL', 5)  # 每 5 秒检查一次
 COMFYUI_READY_RETRIES = get_env_int('COMFYUI_READY_RETRIES', 200)  # 最多重试 60 次
 
+# ComfyUI 工作流执行超时配置
+COMFYUI_TOTAL_TIMEOUT = get_env_int('COMFYUI_TOTAL_TIMEOUT', 1800)  # 总超时时间（30分钟）
+
 # 结果节点类型配置
 RESULT_NODE_TYPES = os.getenv('RESULT_NODE_TYPES', 'SaveImage,PreviewImage,SaveAudio').split(',')
 RESULT_NODE_TYPES = [node_type.strip() for node_type in RESULT_NODE_TYPES if node_type.strip()]

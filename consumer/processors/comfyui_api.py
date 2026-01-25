@@ -11,7 +11,7 @@ from datetime import datetime
 from websocket import WebSocketTimeoutException
 from loguru import logger
 from core.storage import get_storage_manager
-from config.settings import COMFYUI_URL
+from config.settings import COMFYUI_URL, COMFYUI_TOTAL_TIMEOUT
 
 class ComfyUI:
     def __init__(self, server_address=None, workflow_name=None):
@@ -176,18 +176,21 @@ class ComfyUI:
             raise
 
 
-    def wait_for_completion(self, prompt_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> dict:
+    def wait_for_completion(self, prompt_id: str, timeout: int = None, task_id: str = None, progress_callback=None) -> dict:
         """使用WebSocket等待执行完成，同时收集executed消息中的输出
 
         Returns:
             dict: 从 executed 消息中收集的节点输出 {node_id: output_data}
         """
+        # 使用配置的总超时时间
+        total_timeout = timeout or COMFYUI_TOTAL_TIMEOUT
+
         # 确保 WebSocket 已连接且活跃
         if not self.ws_connected or not self.is_websocket_alive():
             self.connect_websocket()
 
-        logger.debug(f"等待 prompt {prompt_id} 执行完成...")
-        self.ws.settimeout(timeout)
+        logger.debug(f"等待 prompt {prompt_id} 执行完成，超时时间: {total_timeout}s")
+        self.ws.settimeout(30)  # 单次接收超时30秒，会自动重试
         start_time = time.time()
 
         # 进度通知控制变量
@@ -200,8 +203,8 @@ class ComfyUI:
         try:
             while True:
                 elapsed_time = time.time() - start_time
-                if elapsed_time > timeout:
-                    logger.error(f"等待执行完成超时! 已等待 {elapsed_time:.2f} 秒")
+                if elapsed_time > total_timeout:
+                    logger.error(f"❌ 任务执行超时! 已等待 {elapsed_time:.2f} 秒")
                     raise TimeoutError(f"Workflow execution timed out after {elapsed_time:.2f} seconds.")
 
                 try:
@@ -430,7 +433,7 @@ class ComfyUI:
         logger.debug(f"WebSocket 收集到 {len(executed_outputs)} 个节点的 executed 输出")
         return executed_outputs
 
-    def get_workflow_results(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[dict]:
+    def get_workflow_results(self, prompt: dict, message_id: str, timeout: int = None, task_id: str = None, progress_callback=None) -> list[dict]:
         """执行工作流并获取所有结果文件
 
         Returns:
@@ -585,7 +588,7 @@ class ComfyUI:
         logger.info(f"工作流执行完成! 总共生成 {len(output_results)} 个结果文件")
         return output_results
 
-    def get_images(self, prompt: dict, message_id: str, timeout: int = 150, task_id: str = None, progress_callback=None) -> list[str]:
+    def get_images(self, prompt: dict, message_id: str, timeout: int = None, task_id: str = None, progress_callback=None) -> list[str]:
         """生成图像并获取结果（向后兼容方法，只返回 URL 列表）"""
         results = self.get_workflow_results(prompt, message_id, timeout, task_id, progress_callback)
         # 提取 URL 列表，保持向后兼容
